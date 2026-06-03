@@ -1,0 +1,120 @@
+import { getDb } from "@/lib/db"
+import { NextResponse } from "next/server"
+import { requireNotViewer } from "@/lib/auth"
+import { writeAuditLog } from "@/lib/audit"
+import { newId } from "@/lib/utils"
+
+export const dynamic = "force-dynamic"
+
+function enrichOrder(db: ReturnType<typeof getDb>, r: Record<string, unknown>) {
+  const lines = db.prepare("SELECT * FROM sales_order_lines WHERE order_id=?").all(r.id) as Record<string, unknown>[]
+  return {
+    id: r.id, customerId: r.customer_id, status: r.status, notes: r.notes,
+    createdBy: r.created_by, updatedBy: r.updated_by,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+    requestedDeliveryDate: r.requested_delivery_date,
+    promisedDeliveryDate:  r.promised_delivery_date,
+    actualDeliveryDate:    r.actual_delivery_date,
+    parentOrderId: r.parent_order_id,
+    revisionNumber: r.revision_number ?? 1,
+    approvalStatus: r.approval_status ?? "PENDING",
+    creditCheckPassed: r.credit_check_passed === 1,
+    lines: lines.map(l => ({
+      id: l.id, productId: l.product_id, qty: l.qty,
+      unitPrice: l.unit_price, fulfilledQty: l.fulfilled_qty ?? 0,
+    })),
+  }
+}
+
+export async function GET(req: Request) {
+  const db  = getDb()
+  const url = new URL(req.url)
+  const page   = Math.max(1, parseInt(url.searchParams.get("page")  ?? "1"))
+  const limit  = Math.min(200, parseInt(url.searchParams.get("limit") ?? "100"))
+  const offset = (page - 1) * limit
+  const status = url.searchParams.get("status")
+
+  const where  = status ? "WHERE status=?" : ""
+  const params = status ? [status, limit, offset] : [limit, offset]
+
+  const total = (db.prepare(`SELECT COUNT(*) as n FROM sales_orders ${where}`).get(...(status ? [status] : [])) as { n: number }).n
+  const rows  = db.prepare(`SELECT * FROM sales_orders ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
+    .all(...params) as Record<string, unknown>[]
+
+  return NextResponse.json({ data: rows.map(r => enrichOrder(db, r)), total, page, limit })
+}
+
+export async function POST(req: Request) {
+  let auth: Awaited<ReturnType<typeof requireNotViewer>>
+  try { auth = await requireNotViewer(req) } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 403 })
+  }
+
+  const body = await req.json()
+  const db   = getDb()
+  const id   = newId("so")
+  const now  = new Date().toISOString()
+
+  if (!body.customerId) return NextResponse.json({ error: "customerId is required" }, { status: 400 })
+  if (!body.lines?.length) return NextResponse.json({ error: "At least one order line is required" }, { status: 400 })
+
+  for (const line of body.lines) {
+    if (!line.productId) return NextResponse.json({ error: "Each line needs a productId" }, { status: 400 })
+    if (!line.qty || line.qty <= 0) return NextResponse.json({ error: "Each line needs qty > 0" }, { status: 400 })
+    if (!line.unitPrice || line.unitPrice <= 0) return NextResponse.json({ error: "Each line needs unitPrice > 0" }, { status: 400 })
+  }
+
+  // ── Credit limit check ─────────────────────────────────────────────────────
+  const customer = db.prepare("SELECT name, credit_limit FROM customers WHERE id=? AND is_active=1").get(body.customerId) as
+    { name: string; credit_limit: number } | undefined
+  if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 })
+
+  const newOrderValue = body.lines.reduce((sum: number, l: { qty: number; unitPrice: number }) => sum + l.qty * l.unitPrice, 0)
+
+  const openExposure = (db.prepare(`
+    SELECT COALESCE(SUM(sol.qty * sol.unit_price), 0) as total
+    FROM sales_order_lines sol
+    JOIN sales_orders so ON so.id = sol.order_id
+    WHERE so.customer_id=? AND so.status NOT IN ('DELIVERED','CANCELLED','PAID')
+  `).get(body.customerId) as { total: number }).total
+
+  const creditCheckPassed = customer.credit_limit === 0 || (openExposure + newOrderValue) <= customer.credit_limit
+  const status = creditCheckPassed ? "DRAFT" : "CREDIT_HOLD"
+
+  db.transaction(() => {
+    db.prepare(`
+      INSERT INTO sales_orders
+        (id, customer_id, status, notes, created_by, created_at, updated_at, requested_delivery_date, credit_check_passed)
+      VALUES (?,?,?,?,?,?,?,?,?)
+    `).run(id, body.customerId, status, body.notes ?? null, auth.id, now, now,
+           body.requestedDeliveryDate ?? null, creditCheckPassed ? 1 : 0)
+
+    for (const line of body.lines) {
+      db.prepare("INSERT INTO sales_order_lines (order_id, product_id, qty, unit_price) VALUES (?,?,?,?)")
+        .run(id, line.productId, line.qty, line.unitPrice)
+    }
+
+    writeAuditLog(db, {
+      userId: auth.id, action: "SO_CREATED", entityType: "sales_order", entityId: id,
+      after: { customerId: body.customerId, lines: body.lines.length, newOrderValue, creditCheckPassed, status },
+    })
+  })()
+
+  if (!creditCheckPassed) {
+    const over = openExposure + newOrderValue - customer.credit_limit
+    return NextResponse.json(
+      enrichOrder(db, db.prepare("SELECT * FROM sales_orders WHERE id=?").get(id) as Record<string, unknown>),
+      {
+        status: 201,
+        headers: {
+          "X-Credit-Warning": `Order placed on CREDIT_HOLD. Exposure ₹${(openExposure + newOrderValue).toFixed(0)} exceeds limit ₹${customer.credit_limit.toFixed(0)} by ₹${over.toFixed(0)}`,
+        },
+      }
+    )
+  }
+
+  return NextResponse.json(
+    enrichOrder(db, db.prepare("SELECT * FROM sales_orders WHERE id=?").get(id) as Record<string, unknown>),
+    { status: 201 }
+  )
+}
