@@ -662,6 +662,12 @@ function runMigrations(db: Database.Database) {
     addCol(db, "sales_orders", "carrier", "TEXT")
     db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (6)").run()
   }
+
+  // v7: product images
+  if (!ran.has(7)) {
+    addCol(db, "products", "image_url", "TEXT")
+    db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (7)").run()
+  }
 }
 
 // ─── Seed data ────────────────────────────────────────────────────────────────

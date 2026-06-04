@@ -5,6 +5,7 @@ import { useFetch, apiPost, apiPatch, apiDelete } from "@/hooks/use-api"
 import type { Customer, SalesOrder } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Plus, PencilSimple, Trash, Users, Envelope, Phone, MapPin, Spinner, Buildings, Lock } from "@phosphor-icons/react"
 import { toast } from "sonner"
@@ -138,16 +139,16 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="p-6 space-y-5 max-w-[1400px] mx-auto">
+    <div className="p-6 space-y-5 px-10  w-full mx-auto">
       <title>Customers | ShirtCo ERP</title>
       <div className="page-header">
         <div>
           <h1 className="section-title">Customers</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{allCustomers.length} registered customers</p>
         </div>
-        <Button 
-          onClick={openCreate} 
-          disabled={loadingUser || !isSales} 
+        <Button
+          onClick={openCreate}
+          disabled={loadingUser || !isSales}
           className="gap-2 shadow-sm shadow-primary/20"
         >
           {(!loadingUser && !isSales) ? <Lock size={15} weight="bold" /> : <Plus size={15} weight="bold" />} Add Customer
@@ -201,26 +202,29 @@ export default function CustomersPage() {
               <div key={c.id} className="glass-card p-5 hover:shadow-md transition-shadow duration-200 group">
                 {/* Header */}
                 <div className="flex items-start gap-3 mb-4">
-                  <div className="size-10 rounded-xl bg-gradient-to-br from-primary/30 to-violet-500/30 flex items-center justify-center text-sm font-bold text-primary shrink-0">
-                    {initials}
-                  </div>
+                  <Avatar className="h-10 w-10 rounded-full border border-border/50 shrink-0">
+                    <AvatarImage src={`https://picsum.photos/seed/${c.id}/100/100`} alt={c.name} className="object-cover" />
+                    <AvatarFallback className="bg-gradient-to-br from-primary/30 to-violet-500/30 text-primary font-bold text-sm">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
                   <div className="flex-1 min-w-0">
                     <p className="font-heading font-semibold text-[14px] truncate">{c.name}</p>
                     <p className="text-[11px] text-muted-foreground">Credit: {formatINR(c.creditLimit ?? 0)} · {c.paymentTerms}</p>
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button 
-                      variant="ghost" 
-                      size="icon-xs" 
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
                       onClick={() => openEdit(c)}
                       disabled={loadingUser || !isSales}
                     >
                       {(!loadingUser && !isSales) ? <Lock size={13} /> : <PencilSimple size={13} />}
                     </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="icon-xs" 
-                      className="text-destructive hover:text-destructive" 
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-destructive hover:text-destructive"
                       onClick={() => setDeleteTarget(c)}
                       disabled={loadingUser || !isSales}
                     >

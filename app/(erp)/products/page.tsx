@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { useFetch, apiPost } from "@/hooks/use-api"
 import type { Product } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ function formatINR(v: number) {
 }
 
 export default function ProductsPage() {
+  const router = useRouter()
   const { data: productsRes, loading, refetch } = useFetch<Product[] | { data: Product[] }>("/api/products")
 
   // Current user for RBAC
@@ -22,13 +24,39 @@ export default function ProductsPage() {
   useEffect(() => {
     const stored = localStorage.getItem("current_user")
     if (stored) {
-      try { setCurrentUser(JSON.parse(stored)) } catch {}
+      try { setCurrentUser(JSON.parse(stored)) } catch { }
     }
   }, [])
 
   // Add product
   const [addOpen, setAddOpen] = useState(false)
-  const [addForm, setAddForm] = useState({ name: "", sku: "", price: 0, unitOfMeasure: "pcs", startingStock: 0 })
+  const [addForm, setAddForm] = useState({ name: "", sku: "", price: 0, unitOfMeasure: "pcs", startingStock: 0, imageUrl: "" })
+  const [uploadingImage, setUploadingImage] = useState(false)
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingImage(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData
+      })
+
+      if (!res.ok) throw new Error("Upload failed")
+      const data = await res.json()
+      setAddForm((prev) => ({ ...prev, imageUrl: data.url }))
+      toast.success("Image uploaded successfully")
+    } catch (error: any) {
+      toast.error(error.message)
+    } finally {
+      setUploadingImage(false)
+    }
+  }
 
   // Add stock (restock)
   const [stockDialog, setStockDialog] = useState<Product | null>(null)
@@ -46,18 +74,18 @@ export default function ProductsPage() {
 
   const products = unwrap(productsRes)
   const totalValue = products.reduce((s, p) => s + p.currentStock * p.price, 0)
-  const lowStock   = products.filter((p) => p.currentStock < 10)
-  const inStock    = products.filter((p) => p.currentStock >= 10)
+  const lowStock = products.filter((p) => p.currentStock < 10)
+  const inStock = products.filter((p) => p.currentStock >= 10)
 
   async function handleAddProduct() {
     if (!addForm.name.trim()) { toast.error("Product name is required"); return }
-    if (addForm.price <= 0)   { toast.error("Price must be greater than 0"); return }
+    if (addForm.price <= 0) { toast.error("Price must be greater than 0"); return }
     setSaving(true)
     try {
       await apiPost("/api/products", addForm)
       toast.success("Product added successfully")
       setAddOpen(false)
-      setAddForm({ name: "", sku: "", price: 0, unitOfMeasure: "pcs", startingStock: 0 })
+      setAddForm({ name: "", sku: "", price: 0, unitOfMeasure: "pcs", startingStock: 0, imageUrl: "" })
       refetch()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to add product")
@@ -89,7 +117,7 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="p-6 space-y-5 max-w-[1200px] mx-auto">
+    <div className="p-6 space-y-5 px-10 w-full mx-auto">
       <title>Products | ShirtCo ERP</title>
 
       {/* Header */}
@@ -136,6 +164,7 @@ export default function ProductsPage() {
         <Table>
           <TableHeader>
             <TableRow className="table-header-row">
+              <TableHead className="font-semibold text-xs w-16">Image</TableHead>
               <TableHead className="font-semibold text-xs">Product</TableHead>
               <TableHead className="font-semibold text-xs">SKU</TableHead>
               <TableHead className="font-semibold text-xs">Price</TableHead>
@@ -150,14 +179,14 @@ export default function ProductsPage() {
           <TableBody>
             {loading && [...Array(5)].map((_, i) => (
               <TableRow key={i}>
-                {[...Array(7)].map((_, j) => (
+                {[...Array(8)].map((_, j) => (
                   <TableCell key={j}><div className="shimmer h-4 rounded" /></TableCell>
                 ))}
               </TableRow>
             ))}
             {!loading && products.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="py-20 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="py-20 text-center text-muted-foreground">
                   <Package size={36} className="mx-auto mb-3 opacity-20" />
                   <p className="font-medium">No products yet</p>
                   <p className="text-sm mt-1">Add your first product to start managing stock</p>
@@ -168,8 +197,21 @@ export default function ProductsPage() {
               const isLow = p.currentStock < 10
               const pct = Math.min(100, (p.currentStock / Math.max(1, 100)) * 100)
               return (
-                <TableRow key={p.id} className={cn("hover:bg-muted/20 transition-colors", isLow && "bg-amber-500/3")}>
-                  <TableCell className="font-medium text-[13px]">{p.name}</TableCell>
+                <TableRow
+                  key={p.id}
+                  className={cn("hover:bg-muted/20 transition-colors cursor-pointer", isLow && "bg-amber-500/3")}
+                  onClick={() => router.push(`/products/${p.id}`)}
+                >
+                  <TableCell>
+                    <div className="w-10 h-10 rounded-md border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden">
+                      {p.imageUrl ? (
+                        <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <Package size={20} className="text-muted-foreground/50" />
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-medium text-[13px] text-foreground">{p.name}</TableCell>
                   <TableCell className="font-mono text-[11px] text-muted-foreground">{p.sku || "—"}</TableCell>
                   <TableCell className="font-bold text-[13px]">{formatINR(p.price)}</TableCell>
                   <TableCell>
@@ -197,12 +239,13 @@ export default function ProductsPage() {
                     </span>
                   </TableCell>
                   {(!currentUser || currentUser.role === "Admin" || currentUser.role === "Inventory Manager") && (
-                    <TableCell className="text-center">
+                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="outline"
                         size="xs"
                         className="gap-1.5"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation()
                           setStockDialog(p)
                           setStockQty(0)
                           setStockInvoiceDetails("")
@@ -270,15 +313,37 @@ export default function ProductsPage() {
                 </select>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Starting Stock</label>
-              <input
-                type="number" min={0}
-                value={addForm.startingStock}
-                onChange={(e) => setAddForm({ ...addForm, startingStock: parseInt(e.target.value) || 0 })}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-bold"
-                placeholder="0"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Starting Stock</label>
+                <input
+                  type="number" min={0}
+                  value={addForm.startingStock}
+                  onChange={(e) => setAddForm({ ...addForm, startingStock: parseInt(e.target.value) || 0 })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-bold text-emerald-600"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Product Image</label>
+                <div className="flex items-center gap-3">
+                  {addForm.imageUrl ? (
+                    <div className="w-10 h-10 rounded border overflow-hidden shrink-0">
+                      <img src={addForm.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-10 h-10 rounded border bg-muted flex items-center justify-center shrink-0">
+                      <Package size={16} className="text-muted-foreground" />
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    disabled={uploadingImage}
+                    className="w-full text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>

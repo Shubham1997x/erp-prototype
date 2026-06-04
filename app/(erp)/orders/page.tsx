@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { useFetch, apiPost } from "@/hooks/use-api"
 import type { Customer, Product, SalesOrder, SalesOrderLine } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -33,12 +34,12 @@ function getSimpleStatus(status: string): SimpleStatus {
 type SimpleStatus = "pending" | "fulfilled" | "shipping" | "needs_restock" | "cancelled" | "other"
 
 const STATUS_UI: Record<SimpleStatus, { label: string; color: string }> = {
-  pending:       { label: "Pending",       color: "bg-blue-500/15 text-blue-500" },
-  shipping:      { label: "Shipping",      color: "bg-teal-500/15 text-teal-600 dark:text-teal-400" },
-  fulfilled:     { label: "Fulfilled",     color: "bg-emerald-500/15 text-emerald-500" },
+  pending: { label: "Pending", color: "bg-blue-500/15 text-blue-500" },
+  shipping: { label: "Shipping", color: "bg-teal-500/15 text-teal-600 dark:text-teal-400" },
+  fulfilled: { label: "Fulfilled", color: "bg-emerald-500/15 text-emerald-500" },
   needs_restock: { label: "Needs Restock", color: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
-  cancelled:     { label: "Cancelled",     color: "bg-destructive/15 text-destructive" },
-  other:         { label: "Other",         color: "bg-muted text-muted-foreground" },
+  cancelled: { label: "Cancelled", color: "bg-destructive/15 text-destructive" },
+  other: { label: "Other", color: "bg-muted text-muted-foreground" },
 }
 
 interface Shortage {
@@ -51,6 +52,7 @@ interface Shortage {
 interface PaginatedResponse<T> { data: T[]; total: number; page: number; limit: number }
 
 export default function OrdersPage() {
+  const router = useRouter()
   const { data: ordersRes, loading: loadingOrders, refetch } = useFetch<PaginatedResponse<SalesOrder> | SalesOrder[]>("/api/sales-orders")
   const { data: customersRes } = useFetch<Customer[] | PaginatedResponse<Customer>>("/api/customers")
   const { data: productsRes } = useFetch<Product[] | PaginatedResponse<Product>>("/api/products")
@@ -60,7 +62,7 @@ export default function OrdersPage() {
   useEffect(() => {
     const stored = localStorage.getItem("current_user")
     if (stored) {
-      try { setCurrentUser(JSON.parse(stored)) } catch {}
+      try { setCurrentUser(JSON.parse(stored)) } catch { }
     }
   }, [])
 
@@ -69,27 +71,6 @@ export default function OrdersPage() {
   const [customerId, setCustomerId] = useState("")
   const [lines, setLines] = useState<SalesOrderLine[]>([{ productId: "", qty: 1, unitPrice: 0 }])
   const [saving, setSaving] = useState(false)
-
-  // Action states
-  const [checkingId, setCheckingId] = useState<string | null>(null)
-  const [restockDialog, setRestockDialog] = useState<{
-    order: SalesOrder
-    shortages: Shortage[]
-  } | null>(null)
-  const [restockForm, setRestockForm] = useState<Record<string, { qty: number; invoiceDetails: string }>>({})
-  const [restocking, setRestocking] = useState(false)
-
-  // Cancel
-  const [cancelTarget, setCancelTarget] = useState<SalesOrder | null>(null)
-  const [cancelling, setCancelling] = useState(false)
-
-  // Ship order dialog
-  const [shipDialog, setShipDialog] = useState<SalesOrder | null>(null)
-  const [shipForm, setShipForm] = useState({ carrier: "", trackingNumber: "" })
-  const [shipping, setShipping] = useState(false)
-
-  // Sheet View Order
-  const [viewOrder, setViewOrder] = useState<SalesOrder | null>(null)
 
   // Unwrap both paginated and array responses
   function unwrap<T>(res: PaginatedResponse<T> | T[] | null | undefined): T[] {
@@ -104,10 +85,10 @@ export default function OrdersPage() {
   const allProducts = unwrap(productsRes)
 
   // Stats
-  const pending   = allOrders.filter((o) => getSimpleStatus(o.status) === "pending")
+  const pending = allOrders.filter((o) => getSimpleStatus(o.status) === "pending")
   const fulfilled = allOrders.filter((o) => getSimpleStatus(o.status) === "fulfilled")
   const needsRestock = allOrders.filter((o) => o.status === "NEEDS_RESTOCK")
-  const revenue   = fulfilled.reduce((s, o) => s + o.lines.reduce((ss, l) => ss + l.qty * l.unitPrice, 0), 0)
+  const revenue = fulfilled.reduce((s, o) => s + o.lines.reduce((ss, l) => ss + l.qty * l.unitPrice, 0), 0)
 
   function updateLine(idx: number, field: keyof SalesOrderLine, value: string | number) {
     setLines((prev) => {
@@ -142,89 +123,10 @@ export default function OrdersPage() {
     }
   }
 
-  async function handleCheckStock(order: SalesOrder) {
-    setCheckingId(order.id)
-    try {
-      const res = await apiPost(`/api/sales-orders/${order.id}/fulfill`, {})
-      const data = res as { status: string; shortages: Shortage[] }
-      if (data.status === "READY_TO_SHIP") {
-        toast.success("✓ Stock reserved — order ready to ship!")
-        refetch()
-      } else if (data.status === "NEEDS_RESTOCK") {
-        toast.warning("Stock shortage detected — Restock Request raised!")
-        refetch()
-      }
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Stock check failed")
-    } finally {
-      setCheckingId(null)
-    }
-  }
 
-  async function handleRestock() {
-    if (!restockDialog) return
-    setRestocking(true)
-    try {
-      // For each shortage, add stock
-      for (const [productId, { qty, invoiceDetails }] of Object.entries(restockForm)) {
-        if (qty <= 0) continue
-        await apiPost("/api/stock", {
-          entityType: "product",
-          entityId: productId,
-          delta: qty,
-          reason: `Restock${invoiceDetails ? ` - Invoice: ${invoiceDetails}` : ""}`,
-        })
-      }
-      // Now try to fulfill the order
-      const res = await apiPost(`/api/sales-orders/${restockDialog.order.id}/fulfill`, {})
-      const data = res as { status: string }
-      if (data.status === "READY_TO_SHIP") {
-        toast.success("Stock added & order is Ready to Ship!")
-      } else {
-        toast.success("Stock restocked — please check the order again")
-      }
-      setRestockDialog(null)
-      refetch()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Restock failed")
-    } finally {
-      setRestocking(false)
-    }
-  }
-
-  async function handleShip() {
-    if (!shipDialog) return
-    setShipping(true)
-    try {
-      await apiPost(`/api/sales-orders/${shipDialog.id}/ship`, shipForm)
-      toast.success("Order Shipped!")
-      setShipDialog(null)
-      setShipForm({ carrier: "", trackingNumber: "" })
-      refetch()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to ship order")
-    } finally {
-      setShipping(false)
-    }
-  }
-
-  async function handleCancel() {
-    if (!cancelTarget) return
-    setCancelling(true)
-    try {
-      await apiPost(`/api/sales-orders/${cancelTarget.id}/cancel`, { reason: "Manually cancelled" })
-      toast.success("Order cancelled")
-      setCancelTarget(null)
-      refetch()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to cancel")
-    } finally {
-      setCancelling(false)
-    }
-  }
 
   return (
-    <div className="p-6 space-y-5 max-w-[1200px] mx-auto">
+    <div className="p-6 space-y-5 px-10 w-full mx-auto">
       <title>Orders | ShirtCo ERP</title>
 
       {/* Header */}
@@ -276,11 +178,11 @@ export default function OrdersPage() {
             <TableRow className="table-header-row">
               <TableHead className="font-semibold text-xs">Order ID</TableHead>
               <TableHead className="font-semibold text-xs">Customer</TableHead>
-              <TableHead className="font-semibold text-xs">Items</TableHead>
-              <TableHead className="font-semibold text-xs">Total</TableHead>
-              <TableHead className="font-semibold text-xs">Status</TableHead>
               <TableHead className="font-semibold text-xs">Date</TableHead>
-              <TableHead className="font-semibold text-xs">Actions</TableHead>
+              <TableHead className="font-semibold text-xs">Items</TableHead>
+              <TableHead className="font-semibold text-xs">Status</TableHead>
+              <TableHead className="font-semibold text-xs text-right">Total</TableHead>
+              <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -295,7 +197,7 @@ export default function OrdersPage() {
               <TableRow>
                 <TableCell colSpan={7} className="py-20 text-center text-muted-foreground">
                   <ShoppingCart size={36} className="mx-auto mb-3 opacity-20" />
-                  <p className="font-medium">No orders yet</p>
+                  <p className="font-medium">No orders found</p>
                   <p className="text-sm mt-1">Create your first order to get started</p>
                 </TableCell>
               </TableRow>
@@ -305,16 +207,58 @@ export default function OrdersPage() {
               const simple = getSimpleStatus(order.status)
               const ui = STATUS_UI[simple]
               const total = order.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0)
+              
+              // Extract unique images to display in the avatar stack
+              const images = order.lines.map(l => l.imageUrl).filter(Boolean) as string[]
+              const uniqueImages = Array.from(new Set(images))
 
               return (
                 <TableRow
                   key={order.id}
                   className="cursor-pointer hover:bg-muted/30 transition-colors"
-                  onClick={() => setViewOrder(order)}
+                  onClick={() => router.push(`/orders/${order.id}`)}
                 >
                   <TableCell className="font-mono text-xs font-semibold text-primary">{order.id}</TableCell>
                   <TableCell className="font-medium text-[13px]">{cust?.name ?? "—"}</TableCell>
                   <TableCell className="text-[12px] text-muted-foreground">{formatDate(order.createdAt)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center group relative h-8 w-16 z-0 hover:z-50 cursor-pointer">
+                      {uniqueImages.slice(0, 5).map((img, idx) => (
+                        <div 
+                          key={idx} 
+                          className={cn(
+                            "absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-background bg-muted overflow-hidden transition-all duration-300 ease-out shadow-sm",
+                            "translate-x-[var(--stack-x)] group-hover:translate-x-[var(--hover-x)]"
+                          )}
+                          style={{
+                            zIndex: 50 - idx,
+                            "--stack-x": `${idx * 5}px`,
+                            "--hover-x": `${idx * 24}px`,
+                          } as React.CSSProperties}
+                        >
+                          <img src={img} alt="Product" className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                      {uniqueImages.length > 5 && (
+                        <div 
+                          className={cn(
+                            "absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold transition-all duration-300 ease-out shadow-sm",
+                            "translate-x-[var(--stack-x)] group-hover:translate-x-[var(--hover-x)]"
+                          )}
+                          style={{
+                            zIndex: 40,
+                            "--stack-x": `${5 * 5}px`,
+                            "--hover-x": `${5 * 24}px`,
+                          } as React.CSSProperties}
+                        >
+                          +{uniqueImages.length - 5}
+                        </div>
+                      )}
+                      {uniqueImages.length === 0 && (
+                        <span className="text-xs text-muted-foreground/50 italic px-2">No images</span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <span className={`badge-status ${ui.color}`}>{ui.label}</span>
                   </TableCell>
@@ -423,349 +367,6 @@ export default function OrdersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* ── Restock Dialog ─────────────────────────────────────────────────── */}
-      <Dialog open={!!restockDialog} onOpenChange={(o) => !o && setRestockDialog(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-heading flex items-center gap-2 text-amber-600 dark:text-amber-400">
-              <Package size={18} weight="fill" /> Restock Required
-            </DialogTitle>
-          </DialogHeader>
-          {restockDialog && (
-            <div className="space-y-4 py-2">
-              <p className="text-sm text-muted-foreground">
-                Order <span className="font-mono font-bold text-foreground">{restockDialog.order.id}</span> needs
-                the following items to be restocked before it can be fulfilled.
-              </p>
-
-              <div className="space-y-3">
-                {restockDialog.shortages.map((s) => (
-                  <div key={s.productId} className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 space-y-2.5">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-semibold text-sm">{s.name}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                          Need <span className="font-bold text-foreground">{s.required}</span> · Have{" "}
-                          <span className="font-bold text-amber-500">{s.available}</span> · Short by{" "}
-                          <span className="font-bold text-destructive">{s.required - s.available}</span>
-                        </p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                          Qty to Add
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={restockForm[s.productId]?.qty ?? s.required - s.available}
-                          onChange={(e) => setRestockForm((f) => ({
-                            ...f,
-                            [s.productId]: { ...f[s.productId], qty: parseInt(e.target.value) || 0 }
-                          }))}
-                          className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs font-bold"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                          Invoice Details (Optional)
-                        </label>
-                        <input
-                          type="text"
-                          value={restockForm[s.productId]?.invoiceDetails ?? ""}
-                          onChange={(e) => setRestockForm((f) => ({
-                            ...f,
-                            [s.productId]: { ...f[s.productId], invoiceDetails: e.target.value }
-                          }))}
-                          placeholder="e.g. INV-1234 from Supplier"
-                          className="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRestockDialog(null)}>Cancel</Button>
-            <Button
-              onClick={handleRestock}
-              disabled={restocking}
-              className="gap-1.5 bg-amber-500 hover:bg-amber-600 text-white border-0 shadow-sm shadow-amber-500/20"
-            >
-              {restocking && <Spinner size={14} className="animate-spin" />}
-              <Package size={14} /> Add Stock & Fulfill
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Ship Confirm Dialog ───────────────────────────────────────────── */}
-      <Dialog open={!!shipDialog} onOpenChange={(o) => !o && setShipDialog(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="font-heading flex items-center gap-2">
-              <Package size={18} className="text-teal-600" /> Shipping Details
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">
-              Order <span className="font-mono font-bold text-foreground">{shipDialog?.id}</span> is ready to ship. Enter logistics details to finalize.
-            </p>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Carrier</label>
-              <input
-                value={shipForm.carrier}
-                onChange={(e) => setShipForm({ ...shipForm, carrier: e.target.value })}
-                placeholder="e.g. BlueDart, FedEx"
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tracking Number</label>
-              <input
-                value={shipForm.trackingNumber}
-                onChange={(e) => setShipForm({ ...shipForm, trackingNumber: e.target.value })}
-                placeholder="e.g. 1Z9999W9999"
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShipDialog(null)}>Cancel</Button>
-            <Button onClick={handleShip} disabled={shipping} className="bg-teal-600 hover:bg-teal-700 text-white">
-              {shipping && <Spinner size={14} className="animate-spin mr-1" />}
-              Mark as Shipped
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Cancel Confirm Dialog ───────────────────────────────────────────── */}
-      <Dialog open={!!cancelTarget} onOpenChange={(o) => !o && setCancelTarget(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="font-heading text-destructive flex items-center gap-2">
-              <XCircle size={18} weight="fill" /> Cancel Order?
-            </DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground py-1">
-            Are you sure you want to cancel order{" "}
-            <span className="font-mono font-bold text-foreground">{cancelTarget?.id}</span>?
-            This cannot be undone.
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCancelTarget(null)}>Keep Order</Button>
-            <Button variant="destructive" onClick={handleCancel} disabled={cancelling}>
-              {cancelling && <Spinner size={14} className="animate-spin mr-1" />}
-              Cancel Order
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Slide-out Sheet for Order Details ───────────────────────────── */}
-      <Sheet open={!!viewOrder} onOpenChange={(o) => !o && setViewOrder(null)}>
-        <SheetContent className="sm:max-w-md w-[400px] flex flex-col gap-0 p-0 border-l border-border bg-background">
-          {viewOrder && (() => {
-            const cust = allCustomers.find((c) => c.id === viewOrder.customerId)
-            const simple = getSimpleStatus(viewOrder.status)
-            const ui = STATUS_UI[simple]
-            const total = viewOrder.lines.reduce((acc, l) => acc + l.qty * l.unitPrice, 0)
-
-            // RBAC
-            const isSales = !currentUser || currentUser.role === "Admin" || currentUser.role === "Sales Executive"
-            const isInventory = !currentUser || currentUser.role === "Admin" || currentUser.role === "Inventory Manager"
-
-            const canCheck = isSales && ["DRAFT", "SUBMITTED", "INVENTORY_CHECK", "APPROVED", "IN_PRODUCTION"].includes(viewOrder.status)
-            const canRestock = isInventory && viewOrder.status === "NEEDS_RESTOCK"
-            const canShip = isSales && viewOrder.status === "READY_TO_SHIP"
-            const canCancel = isSales && !["DELIVERED", "CANCELLED", "PAID", "SHIPPED"].includes(viewOrder.status)
-
-            return (
-              <>
-                <SheetHeader className="p-6 border-b text-left">
-                  <div className="flex items-center justify-between mb-1">
-                    <SheetTitle className="font-mono text-lg">{viewOrder.id}</SheetTitle>
-                    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tracking-wide", ui.color)}>
-                      {ui.label}
-                    </span>
-                  </div>
-                  <SheetDescription>
-                    Placed on {formatDate(viewOrder.createdAt)}
-                  </SheetDescription>
-                </SheetHeader>
-
-                <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                  {/* Customer Info */}
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                      Customer
-                      <div className="h-px bg-border flex-1"></div>
-                    </h3>
-                    <div>
-                      <div className="font-semibold text-foreground">{cust?.name || "Unknown Customer"}</div>
-                      {cust?.email && <div className="text-sm text-muted-foreground">{cust.email}</div>}
-                    </div>
-                  </div>
-
-                  {/* Products */}
-                  <div className="space-y-2">
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                      Line Items
-                      <div className="h-px bg-border flex-1"></div>
-                    </h3>
-                    <div className="rounded-xl border bg-card overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="hover:bg-transparent">
-                            <TableHead>Item</TableHead>
-                            <TableHead className="text-right">Qty</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {viewOrder.lines.map((l, i) => {
-                            const p = allProducts.find((p) => p.id === l.productId)
-                            return (
-                              <TableRow key={i} className="hover:bg-transparent">
-                                <TableCell>
-                                  <div className="font-medium">{p?.name || l.productId}</div>
-                                  <div className="text-xs text-muted-foreground">{formatINR(l.unitPrice)} each</div>
-                                </TableCell>
-                                <TableCell className="text-right font-medium">{l.qty}</TableCell>
-                                <TableCell className="text-right font-medium">{formatINR(l.qty * l.unitPrice)}</TableCell>
-                              </TableRow>
-                            )
-                          })}
-                          <TableRow className="bg-muted/20 hover:bg-muted/20">
-                            <TableCell colSpan={2} className="font-bold text-right">Grand Total</TableCell>
-                            <TableCell className="text-right font-bold text-primary">{formatINR(total)}</TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-
-                  {/* Logistics */}
-                  {(viewOrder.tracking_number || viewOrder.carrier || viewOrder.status === "SHIPPED") && (
-                    <div className="space-y-2">
-                      <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                        Logistics
-                        <div className="h-px bg-border flex-1"></div>
-                      </h3>
-                      <div className="bg-teal-500/10 rounded-xl p-4 border border-teal-500/20 text-sm">
-                        <div className="grid grid-cols-2 gap-y-2">
-                          <div className="text-muted-foreground">Carrier:</div>
-                          <div className="font-medium text-foreground">{viewOrder.carrier || "Not specified"}</div>
-                          <div className="text-muted-foreground">Tracking:</div>
-                          <div className="font-mono font-bold text-teal-700 dark:text-teal-400">{viewOrder.tracking_number || "Pending"}</div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Actions Footer */}
-                <div className="p-6 border-t bg-muted/20 mt-auto">
-                  {(simple === "fulfilled" || viewOrder.status === "SHIPPED") ? (
-                    <div className="flex items-center justify-center gap-2 py-2 text-emerald-600 font-semibold bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-                      <CheckCircle size={20} weight="fill" /> Order is fully processed
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {canCheck && (
-                        <Button
-                          className="w-full gap-2 bg-primary/90 hover:bg-primary"
-                          onClick={() => handleCheckStock(viewOrder)}
-                          disabled={checkingId === viewOrder.id}
-                        >
-                          {checkingId === viewOrder.id ? <Spinner size={16} className="animate-spin" /> : <Check size={16} />} 
-                          Check Stock & Reserve
-                        </Button>
-                      )}
-                      
-                      {canRestock && (
-                        <div className="space-y-2">
-                          <div className="text-xs text-center text-amber-600 bg-amber-500/10 p-2 rounded border border-amber-500/20 flex flex-col items-center gap-1">
-                            <Warning weight="fill" size={16} /> 
-                            Stock shortage detected
-                          </div>
-                          <Button
-                            className="w-full gap-2 bg-amber-600 hover:bg-amber-700 text-white"
-                            onClick={() => {
-                              setViewOrder(null)
-                              // Rebuild shortage info from order lines vs current stock
-                              const shortages: Shortage[] = viewOrder.lines
-                                .map((l) => {
-                                  const prod = allProducts.find((p) => p.id === l.productId)
-                                  return {
-                                    productId: l.productId,
-                                    name: prod?.name ?? l.productId,
-                                    required: l.qty,
-                                    available: prod?.currentStock ?? 0,
-                                  }
-                                })
-                                .filter((s) => s.available < s.required)
-                              const form: Record<string, { qty: number; invoiceDetails: string }> = {}
-                              for (const s of shortages) {
-                                form[s.productId] = {
-                                  qty: s.required - s.available,
-                                  invoiceDetails: "",
-                                }
-                              }
-                              setRestockForm(form)
-                              setRestockDialog({ order: viewOrder, shortages })
-                            }}
-                          >
-                            <Package size={16} /> Fulfill Restock Request
-                          </Button>
-                        </div>
-                      )}
-
-                      {!canRestock && viewOrder.status === "NEEDS_RESTOCK" && (
-                        <div className="text-xs text-center text-amber-600 bg-amber-500/10 p-2.5 rounded border border-amber-500/20 flex items-center justify-center gap-2 font-medium">
-                          <Spinner size={14} className="animate-spin" />
-                          Waiting for Inventory Manager to Restock
-                        </div>
-                      )}
-
-                      {canShip && (
-                        <Button
-                          className="w-full gap-2 bg-teal-600 hover:bg-teal-700 text-white"
-                          onClick={() => {
-                            setShipForm({ carrier: "", trackingNumber: "" })
-                            setShipDialog(viewOrder)
-                          }}
-                        >
-                          <Package size={16} /> Ship Order
-                        </Button>
-                      )}
-
-                      {canCancel && (
-                        <Button
-                          variant="outline"
-                          className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20"
-                          onClick={() => {
-                            setViewOrder(null)
-                            setCancelTarget(viewOrder)
-                          }}
-                        >
-                          Cancel Order
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </>
-            )
-          })()}
-        </SheetContent>
-      </Sheet>
-
     </div>
   )
 }

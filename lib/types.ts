@@ -83,6 +83,7 @@ export interface Product {
   standardCost?: number
   category?: string | null
   isActive?: boolean
+  imageUrl?: string | null
 }
 
 // ─── Sales Orders ─────────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ export interface SalesOrderLine {
   qty: number
   unitPrice: number
   fulfilledQty?: number
+  imageUrl?: string | null
 }
 
 export interface SalesOrder {

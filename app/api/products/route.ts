@@ -9,6 +9,7 @@ export async function GET() {
   return NextResponse.json(rows.map((r) => ({
     id: r.id, name: r.name, sku: r.sku, unitOfMeasure: r.unit_of_measure,
     price: r.price, bomId: r.bom_id, currentStock: r.current_stock,
+    imageUrl: r.image_url,
   })))
 }
 
@@ -20,10 +21,14 @@ export async function POST(req: Request) {
   const bomId = `bom-${Date.now()}`
 
   const createTransaction = db.transaction(() => {
+    // Assign default image if not provided
+    const randomDefaultId = Math.floor(Math.random() * 10) + 1
+    const finalImageUrl = body.imageUrl || `/defaults/tshirt-${randomDefaultId}.jpg`
+
     // 1. Create Product
     db.prepare(`
-      INSERT INTO products (id, name, sku, unit_of_measure, price, bom_id, current_stock)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products (id, name, sku, unit_of_measure, price, bom_id, current_stock, image_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       productId,
       body.name,
@@ -31,7 +36,8 @@ export async function POST(req: Request) {
       body.unitOfMeasure ?? "pcs",
       body.price ?? 0,
       bomId,
-      body.startingStock ?? 0
+      body.startingStock ?? 0,
+      finalImageUrl
     )
 
     // 2. Create default Draft BOM
@@ -60,5 +66,6 @@ export async function POST(req: Request) {
     price: created.price,
     bomId: created.bom_id,
     currentStock: created.current_stock,
+    imageUrl: created.image_url,
   }, { status: 201 })
 }
