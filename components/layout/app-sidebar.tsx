@@ -112,7 +112,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader className="flex flex-row items-center gap-3 border-b border-sidebar-border/50 px-3 pb-3 pt-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
         <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded-full border border-sidebar-border/40 bg-black text-primary-foreground shadow shadow-primary/30 group-data-[collapsible=icon]:size-9">
-          <img src="/logo.jpg" className="size-full object-center p-2 rounded-full" alt="ShirtCo" />
+          <img src="/logo.jpg" className="size-full object-cover rounded-full" alt="ShirtCo" />
         </div>
         <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
           <span className="truncate font-heading text-base font-bold">ShirtCo ERP</span>
