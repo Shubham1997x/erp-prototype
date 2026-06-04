@@ -5,9 +5,7 @@ import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import {
-  ChartBar, ShoppingCart, Users, Buildings, Package, TreeStructure,
-  Factory, Wrench, Truck, Gear, SignOut, CaretUpDown, CurrencyDollar,
-  ChartLine, Bell, Warehouse, ClipboardText, ArrowsLeftRight,
+  ChartBar, ShoppingCart, Users, Package, Gear, SignOut, CaretUpDown, Warning,
 } from "@phosphor-icons/react"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel,
@@ -18,26 +16,29 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 
-type UserRole = "Admin" | "Sales Executive" | "Production Manager" | "Inventory Manager" | "Finance Manager" | "Viewer"
+// Simplified nav — only the 4 core sections
+const NAV_ITEMS = [
+  { name: "Dashboard", url: "/dashboard", icon: ChartBar, roles: ["Admin", "Sales Executive", "Inventory Manager", "Viewer"] },
+  { name: "Orders",    url: "/orders",    icon: ShoppingCart, roles: ["Admin", "Sales Executive", "Inventory Manager"] },
+  { name: "Customers", url: "/customers", icon: Users, roles: ["Admin", "Sales Executive"] },
+  { name: "Products",  url: "/products",  icon: Package, roles: ["Admin", "Inventory Manager"] },
+]
 
-const ROLE_NAV: Record<string, string[]> = {
-  Admin:              ["/dashboard","/sales-orders","/customers","/suppliers","/inventory","/bom","/production","/mes","/shipments","/purchase-orders","/finance","/quality","/warehouses","/reports","/notifications","/settings"],
-  "Sales Executive":  ["/dashboard","/sales-orders","/customers","/inventory","/shipments","/notifications","/settings"],
-  "Production Manager":["/dashboard","/inventory","/bom","/production","/mes","/quality","/notifications","/settings"],
-  "Inventory Manager":["/dashboard","/suppliers","/inventory","/shipments","/purchase-orders","/warehouses","/notifications","/settings"],
-  "Finance Manager":  ["/dashboard","/sales-orders","/customers","/finance","/reports","/notifications","/settings"],
-  Viewer:             ["/dashboard"],
-}
+const SYSTEM_ITEMS = [
+  { name: "Settings", url: "/settings", icon: Gear },
+]
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const router   = useRouter()
   const { state } = useSidebar()
-  const [badges, setBadges] = useState<Record<string, number>>({})
-  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string; role: UserRole } | null>(null)
+
+  const [restockCount, setRestockCount] = useState(0)
+  const [currentUser, setCurrentUser] = useState<{
+    id: string; name: string; email: string; role: string
+  } | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem("current_user")
@@ -46,71 +47,38 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [])
 
+  // Badge: count of orders needing restock
   useEffect(() => {
-    if (!currentUser) return
-    async function loadBadges() {
+    async function loadBadge() {
       try {
-        const [sos, rms, pos, notifs] = await Promise.all([
-          fetch("/api/sales-orders",     { headers: { "X-User-Id": currentUser!.id, "X-User-Role": currentUser!.role } }).then(r => r.json()),
-          fetch("/api/raw-materials",    { headers: { "X-User-Id": currentUser!.id, "X-User-Role": currentUser!.role } }).then(r => r.json()),
-          fetch("/api/production-orders",{ headers: { "X-User-Id": currentUser!.id, "X-User-Role": currentUser!.role } }).then(r => r.json()),
-          fetch("/api/notifications",    { headers: { "X-User-Id": currentUser!.id, "X-User-Role": currentUser!.role } }).then(r => r.json()),
-        ])
-        setBadges({
-          "/sales-orders":  Array.isArray(sos)  ? sos.filter((s:  { status: string }) => ["SUBMITTED","INVENTORY_CHECK","APPROVED"].includes(s.status)).length : 0,
-          "/inventory":     Array.isArray(rms)  ? rms.filter((rm: { currentStock: number; reorderPoint: number }) => rm.currentStock <= rm.reorderPoint).length  : 0,
-          "/production":    Array.isArray(pos)  ? pos.filter((p:  { status: string }) => ["PLANNED","RELEASED","MATERIAL_RESERVED","IN_PROGRESS","QUALITY_CHECK"].includes(p.status)).length : 0,
-          "/notifications": Array.isArray(notifs) ? notifs.filter((n: { isRead: boolean }) => !n.isRead).length : 0,
-        })
+        const userId = currentUser?.id ?? "usr-1"
+        const userRole = currentUser?.role ?? "Admin"
+        const res = await fetch("/api/sales-orders", {
+          headers: { "X-User-Id": userId, "X-User-Role": userRole },
+        }).then((r) => r.json())
+        const orders = Array.isArray(res) ? res : (res?.data ?? [])
+        setRestockCount(orders.filter((o: { status: string }) => o.status === "NEEDS_RESTOCK").length)
       } catch { /* silently ignore */ }
     }
-    loadBadges()
-    const id = setInterval(loadBadges, 30_000)
+    loadBadge()
+    const id = setInterval(loadBadge, 30_000)
     return () => clearInterval(id)
   }, [currentUser])
 
   async function handleLogout() {
-    try {
-      await fetch("/api/auth/logout", { method: "POST" })
-    } catch { /* ignore */ }
+    try { await fetch("/api/auth/logout", { method: "POST" }) } catch { /* ignore */ }
     localStorage.removeItem("current_user")
     toast.success("Logged out")
     router.push("/login")
   }
 
-  const role = (currentUser?.role ?? "Viewer") as UserRole
-  const allowed = ROLE_NAV[role] ?? ["/dashboard"]
   const initials = currentUser
-    ? currentUser.name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+    ? currentUser.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : "?"
 
-  const overviewItems = [
-    { name: "Dashboard",      url: "/dashboard",       icon: ChartBar },
-    { name: "Sales Orders",   url: "/sales-orders",    icon: ShoppingCart },
-    { name: "Customers",      url: "/customers",       icon: Users },
-    { name: "Suppliers",      url: "/suppliers",       icon: Buildings },
-  ].filter(i => allowed.includes(i.url))
-
-  const opsItems = [
-    { name: "Inventory",      url: "/inventory",       icon: Package },
-    { name: "Bill of Materials",url: "/bom",           icon: TreeStructure },
-    { name: "Production",     url: "/production",      icon: Factory },
-    { name: "MES",            url: "/mes",             icon: Wrench },
-    { name: "Shipments",      url: "/shipments",       icon: Truck },
-    { name: "Purchase Orders",url: "/purchase-orders", icon: ClipboardText },
-    { name: "Warehouses",     url: "/warehouses",      icon: Warehouse },
-    { name: "Quality",        url: "/quality",         icon: ArrowsLeftRight },
-  ].filter(i => allowed.includes(i.url))
-
-  const financeItems = [
-    { name: "Finance",        url: "/finance",         icon: CurrencyDollar },
-    { name: "Reports",        url: "/reports",         icon: ChartLine },
-  ].filter(i => allowed.includes(i.url))
-
-  const systemItems = [
-    { name: "Notifications",  url: "/notifications",   icon: Bell },
-    { name: "Settings",       url: "/settings",        icon: Gear },
-  ].filter(i => allowed.includes(i.url))
+  const badges: Record<string, number> = {
+    "/orders": restockCount,
+  }
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -125,49 +93,38 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
 
       <SidebarContent>
-        {overviewItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Overview</SidebarGroupLabel>
-            <SidebarMenu>
-              {overviewItems.map(item => (
-                <NavItem key={item.url} item={item} pathname={pathname} badge={badges[item.url]} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Main Menu</SidebarGroupLabel>
+          <SidebarMenu>
+            {NAV_ITEMS.filter(i => !currentUser || i.roles.includes(currentUser.role)).map((item) => (
+              <NavItem
+                key={item.url}
+                item={item}
+                pathname={pathname}
+                badge={badges[item.url]}
+              />
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
+
+        {/* Restock alert in expanded mode */}
+        {restockCount > 0 && (!currentUser || currentUser.role === "Admin" || currentUser.role === "Inventory Manager") && (
+          <div className="mx-2 mb-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 flex items-start gap-2 group-data-[collapsible=icon]:hidden">
+            <Warning size={13} className="text-amber-500 mt-0.5 shrink-0" weight="fill" />
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium leading-tight">
+              {restockCount} order{restockCount > 1 ? "s" : ""} need restocking
+            </p>
+          </div>
         )}
 
-        {opsItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Operations</SidebarGroupLabel>
-            <SidebarMenu>
-              {opsItems.map(item => (
-                <NavItem key={item.url} item={item} pathname={pathname} badge={badges[item.url]} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
-
-        {financeItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Finance</SidebarGroupLabel>
-            <SidebarMenu>
-              {financeItems.map(item => (
-                <NavItem key={item.url} item={item} pathname={pathname} badge={badges[item.url]} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
-
-        {systemItems.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupLabel>System</SidebarGroupLabel>
-            <SidebarMenu>
-              {systemItems.map(item => (
-                <NavItem key={item.url} item={item} pathname={pathname} badge={badges[item.url]} />
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
-        )}
+        <SidebarGroup>
+          <SidebarGroupLabel>System</SidebarGroupLabel>
+          <SidebarMenu>
+            {SYSTEM_ITEMS.map((item) => (
+              <NavItem key={item.url} item={item} pathname={pathname} />
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
       </SidebarContent>
 
       <SidebarFooter>
@@ -175,7 +132,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarFallback className="rounded-lg bg-gradient-to-br from-primary to-violet-600 text-white font-bold text-[11px] shadow shadow-primary/30">
                       {initials}
@@ -230,9 +190,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 }
 
 function NavItem({
-  item,
-  pathname,
-  badge,
+  item, pathname, badge,
 }: {
   item: { name: string; url: string; icon: React.ElementType }
   pathname: string
@@ -247,7 +205,7 @@ function NavItem({
         </Link>
       </SidebarMenuButton>
       {badge != null && badge > 0 && (
-        <SidebarMenuBadge className="bg-primary !text-primary-foreground rounded-full text-[10px] font-bold px-1.5 min-w-5 h-5 flex items-center justify-center">
+        <SidebarMenuBadge className="bg-amber-500 !text-white rounded-full text-[10px] font-bold px-1.5 min-w-5 h-5 flex items-center justify-center">
           {badge}
         </SidebarMenuBadge>
       )}

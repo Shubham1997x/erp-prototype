@@ -2,7 +2,7 @@ import { getDb } from "@/lib/db"
 import { NextResponse } from "next/server"
 import { requireNotViewer } from "@/lib/auth"
 import { writeAuditLog } from "@/lib/audit"
-import { newId } from "@/lib/utils"
+import { newId } from "@/lib/core"
 
 export const dynamic = "force-dynamic"
 

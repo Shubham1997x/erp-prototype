@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react"
 
-function getAuthHeaders() {
+function getAuthHeaders(): Record<string, string> {
   if (typeof window === "undefined") return {}
   try {
     const stored = localStorage.getItem("current_user")
     if (stored) {
       const user = JSON.parse(stored)
-      return { "X-User-Id": user.id, "X-User-Role": user.role }
+      return { "X-User-Id": String(user.id), "X-User-Role": String(user.role) }
     }
   } catch {}
   return { "X-User-Id": "usr-1", "X-User-Role": "Admin" } // fallback

@@ -11,10 +11,7 @@ import { toast } from "sonner"
 const DEMO_ACCOUNTS = [
   { email: "arjun@shirtco.in",  role: "Admin",             name: "Arjun Mehta" },
   { email: "rahul@shirtco.in",  role: "Sales Executive",   name: "Rahul Verma" },
-  { email: "priya@shirtco.in",  role: "Production Manager",name: "Priya Sharma" },
   { email: "vikram@shirtco.in", role: "Inventory Manager", name: "Vikram Nair" },
-  { email: "meera@shirtco.in",  role: "Finance Manager",   name: "Meera Iyer" },
-  { email: "sneha@shirtco.in",  role: "Viewer",            name: "Sneha Patel" },
 ]
 
 export default function LoginPage() {
@@ -23,14 +20,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [loading, setLoading]   = useState(false)
 
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault()
+  async function doLogin(loginEmail: string, loginPassword: string) {
     setLoading(true)
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error ?? "Login failed"); return }
@@ -44,9 +40,15 @@ export default function LoginPage() {
     }
   }
 
-  function quickLogin(acc: typeof DEMO_ACCOUNTS[0]) {
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault()
+    await doLogin(email, password)
+  }
+
+  async function quickLogin(acc: typeof DEMO_ACCOUNTS[0]) {
     setEmail(acc.email)
     setPassword("Password@123")
+    await doLogin(acc.email, "Password@123")
   }
 
   return (
@@ -104,7 +106,7 @@ export default function LoginPage() {
         {/* Demo accounts */}
         <Card className="border-dashed">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Demo accounts — password: Password@123</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Quick Login — click any account below</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 gap-1.5">
             {DEMO_ACCOUNTS.map(acc => (

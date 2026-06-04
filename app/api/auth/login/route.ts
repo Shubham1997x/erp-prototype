@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getDb } from "@/lib/db"
-import { verifyPassword } from "@/lib/utils"
+import { verifyPassword } from "@/lib/core"
 import { createSession, getSessionCookieOptions } from "@/lib/auth"
 import { writeAuditLog } from "@/lib/audit"
 

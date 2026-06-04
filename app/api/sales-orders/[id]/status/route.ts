@@ -2,7 +2,7 @@ import { getDb } from "@/lib/db"
 import { NextResponse } from "next/server"
 import { requireNotViewer } from "@/lib/auth"
 import { writeAuditLog, createNotification } from "@/lib/audit"
-import { newId } from "@/lib/utils"
+import { newId } from "@/lib/core"
 import { SO_TRANSITIONS } from "@/lib/types"
 import type { SalesOrderStatus } from "@/lib/types"
 

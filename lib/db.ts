@@ -96,6 +96,8 @@ function initSchema(db: Database.Database) {
       created_by TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
+      tracking_number TEXT,
+      carrier TEXT,
       FOREIGN KEY (customer_id) REFERENCES customers(id)
     );
 
@@ -645,18 +647,28 @@ function runMigrations(db: Database.Database) {
 
     db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (4)").run()
   }
+
+  // v5: audit_logs extended columns (before_state, after_state, ip_address)
+  if (!ran.has(5)) {
+    addCol(db, "audit_logs", "before_state", "TEXT")
+    addCol(db, "audit_logs", "after_state",  "TEXT")
+    addCol(db, "audit_logs", "ip_address",   "TEXT")
+    db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (5)").run()
+  }
+
+  // v6: logistics details
+  if (!ran.has(6)) {
+    addCol(db, "sales_orders", "tracking_number", "TEXT")
+    addCol(db, "sales_orders", "carrier", "TEXT")
+    db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (6)").run()
+  }
 }
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
-import {
-  customers, products, rawMaterials, suppliers, users, boms, salesOrders, productionOrders, shipments,
-} from "./seed"
+import { customers, products, users, salesOrders } from "./seed"
 
 function seedDatabase(db: Database.Database) {
   const now = new Date().toISOString()
-
-  const insSupplier = db.prepare("INSERT OR IGNORE INTO suppliers (id,name,contact,lead_time_days,payment_terms) VALUES (?,?,?,?,?)")
-  suppliers.forEach(s => insSupplier.run(s.id, s.name, s.contact, s.leadTimeDays, s.paymentTerms))
 
   const insCustomer = db.prepare("INSERT OR IGNORE INTO customers (id,name,contact,email,address,credit_limit,payment_terms,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
   customers.forEach(c => insCustomer.run(c.id, c.name, c.contact, c.email, c.address, c.creditLimit, c.paymentTerms, now, now))
@@ -667,26 +679,10 @@ function seedDatabase(db: Database.Database) {
   const insProduct = db.prepare("INSERT OR IGNORE INTO products (id,name,sku,unit_of_measure,price,bom_id,current_stock,reserved_stock) VALUES (?,?,?,?,?,?,?,?)")
   products.forEach(p => insProduct.run(p.id, p.name, p.sku, p.unitOfMeasure, p.price, p.bomId, p.currentStock, p.reservedStock))
 
-  const insRM = db.prepare("INSERT OR IGNORE INTO raw_materials (id,name,unit,current_stock,reserved_stock,reorder_point,supplier_id) VALUES (?,?,?,?,?,?,?)")
-  rawMaterials.forEach(r => insRM.run(r.id, r.name, r.unit, r.currentStock, r.reservedStock, r.reorderPoint, r.supplierId))
-
-  const insBom  = db.prepare("INSERT OR IGNORE INTO boms (id,product_id,version,status,created_by,created_at) VALUES (?,?,?,?,?,?)")
-  const insBomC = db.prepare("INSERT INTO bom_components (bom_id,material_id,qty_per_unit) VALUES (?,?,?)")
-  boms.forEach(b => {
-    insBom.run(b.id, b.productId, b.version, b.status, b.createdBy, b.createdAt)
-    b.components.forEach(c => insBomC.run(b.id, c.materialId, c.qtyPerUnit))
-  })
-
-  const insSO   = db.prepare("INSERT OR IGNORE INTO sales_orders (id,customer_id,status,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?)")
-  const insSOL  = db.prepare("INSERT INTO sales_order_lines (order_id,product_id,qty,unit_price) VALUES (?,?,?,?)")
+  const insSO  = db.prepare("INSERT OR IGNORE INTO sales_orders (id,customer_id,status,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?)")
+  const insSOL = db.prepare("INSERT INTO sales_order_lines (order_id,product_id,qty,unit_price) VALUES (?,?,?,?)")
   salesOrders.forEach(so => {
     insSO.run(so.id, so.customerId, so.status, so.createdBy, so.createdAt, so.updatedAt)
     so.lines.forEach(l => insSOL.run(so.id, l.productId, l.qty, l.unitPrice))
   })
-
-  const insPO = db.prepare("INSERT OR IGNORE INTO production_orders (id,sales_order_id,product_id,qty,status,bom_id,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
-  productionOrders.forEach(po => insPO.run(po.id, po.salesOrderId, po.productId, po.qty, po.status, po.bomId, po.notes ?? null, po.createdAt, po.updatedAt))
-
-  const insShp = db.prepare("INSERT OR IGNORE INTO shipments (id,sales_order_id,status,tracking_number,carrier,created_at,updated_at) VALUES (?,?,?,?,?,?,?)")
-  shipments.forEach(sh => insShp.run(sh.id, sh.salesOrderId, sh.status, sh.trackingNumber ?? null, sh.carrier ?? null, sh.createdAt, sh.updatedAt))
 }

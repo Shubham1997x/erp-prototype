@@ -34,7 +34,6 @@ export function useUser() {
     role: user?.role,
     isAdmin: user?.role === "Admin",
     isSales: user?.role === "Sales Executive" || user?.role === "Admin",
-    isProduction: user?.role === "Production Manager" || user?.role === "Admin",
     isInventory: user?.role === "Inventory Manager" || user?.role === "Admin",
   }
 }

@@ -69,8 +69,8 @@ function CustomerFormFields({ form, onChange }: { form: CustomerForm; onChange: 
 
 export default function CustomersPage() {
   const { isSales, loading: loadingUser } = useUser()
-  const { data: customers, loading, refetch } = useFetch<Customer[]>("/api/customers")
-  const { data: orders } = useFetch<SalesOrder[]>("/api/sales-orders")
+  const { data: customersRes, loading, refetch } = useFetch<Customer[] | { data: Customer[] }>("/api/customers")
+  const { data: ordersRes } = useFetch<{ data: SalesOrder[] }>("/api/sales-orders")
 
   const [open, setOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Customer | null>(null)
@@ -79,8 +79,15 @@ export default function CustomersPage() {
   const [form, setForm] = useState<CustomerForm>(emptyForm)
   const [saving, setSaving] = useState(false)
 
-  const allCustomers = customers ?? []
-  const allOrders = orders ?? []
+  // Unwrap both plain-array and paginated {data:[]} API shapes safely
+  function unwrap<T>(res: { data: T[] } | T[] | null | undefined): T[] {
+    if (!res) return []
+    if (Array.isArray(res)) return res
+    if (Array.isArray((res as { data: T[] }).data)) return (res as { data: T[] }).data
+    return []
+  }
+  const allCustomers = unwrap(customersRes)
+  const allOrders = unwrap(ordersRes)
   const filtered = allCustomers.filter((c) =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
     c.email?.toLowerCase().includes(search.toLowerCase())

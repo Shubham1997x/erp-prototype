@@ -8,11 +8,8 @@ export interface AuthUser {
   email: string
   role: UserRole
   isAdmin: boolean
-  isViewer: boolean
   isSales: boolean
-  isProduction: boolean
   isInventory: boolean
-  isFinance: boolean
 }
 
 const SESSION_COOKIE = "erp_session"
@@ -64,11 +61,8 @@ function buildAuthUser(id: string, name: string, email: string, role: UserRole):
   return {
     id, name, email, role,
     isAdmin:      role === "Admin",
-    isViewer:     role === "Viewer",
     isSales:      role === "Sales Executive" || role === "Admin",
-    isProduction: role === "Production Manager" || role === "Admin",
     isInventory:  role === "Inventory Manager" || role === "Admin",
-    isFinance:    role === "Finance Manager"   || role === "Admin",
   }
 }
 
@@ -89,7 +83,7 @@ export async function requireRole(req: Request, allowedRoles: UserRole[]): Promi
 
 export async function requireNotViewer(req: Request): Promise<AuthUser> {
   const auth = await requireAuth(req)
-  if (auth.isViewer) throw new Error("Unauthorized: Viewers cannot perform this action")
+  // Viewer role is removed, everyone is authorized beyond basic auth
   return auth
 }
 

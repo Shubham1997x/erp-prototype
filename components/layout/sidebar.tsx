@@ -4,8 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  ChartBar, ShoppingCart, Package, TreeStructure, Factory,
-  Gear, Truck, Wrench, Users, SignOut, Moon, Sun, List, Buildings,
+  ChartBar, ShoppingCart, Package, Users, SignOut, Moon, Sun, List, Gear, Warning,
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -13,34 +12,22 @@ import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: ChartBar, group: "main" },
-  { href: "/sales-orders", label: "Sales Orders", icon: ShoppingCart, group: "main" },
-  { href: "/customers", label: "Customers", icon: Users, group: "main" },
-  { href: "/suppliers", label: "Suppliers", icon: Buildings, group: "main" },
-  { href: "/inventory", label: "Inventory", icon: Package, group: "ops" },
-  { href: "/bom", label: "Bill of Materials", icon: TreeStructure, group: "ops" },
-  { href: "/production", label: "Production", icon: Factory, group: "ops" },
-  { href: "/mes", label: "MES", icon: Wrench, group: "ops" },
-  { href: "/shipments", label: "Shipments", icon: Truck, group: "ops" },
+  { href: "/dashboard", label: "Dashboard", icon: ChartBar },
+  { href: "/orders",    label: "Orders",    icon: ShoppingCart },
+  { href: "/customers", label: "Customers", icon: Users },
+  { href: "/products",  label: "Products",  icon: Package },
 ]
 
 const DEV_PROFILES = [
-  { id: "usr-1", name: "Arjun Mehta", email: "arjun@shirtco.in", role: "Admin" },
-  { id: "usr-2", name: "Rahul Verma", email: "rahul@shirtco.in", role: "Sales Executive" },
-  { id: "usr-4", name: "Priya Sharma", email: "priya@shirtco.in", role: "Production Manager" },
-  { id: "usr-5", name: "Vikram Nair", email: "vikram@shirtco.in", role: "Inventory Manager" },
-  { id: "usr-6", name: "Sneha Patel", email: "sneha@shirtco.in", role: "Viewer" },
+  { id: "usr-1", name: "Arjun Mehta",  email: "arjun@shirtco.in",  role: "Admin" },
+  { id: "usr-2", name: "Rahul Verma",  email: "rahul@shirtco.in",  role: "Sales Executive" },
+  { id: "usr-5", name: "Vikram Nair",  email: "vikram@shirtco.in", role: "Inventory Manager" },
+  { id: "usr-6", name: "Sneha Patel",  email: "sneha@shirtco.in",  role: "Viewer" },
 ]
 
-const ROLE_NAV_ACCESS: Record<string, string[]> = {
-  Admin: ["/dashboard", "/sales-orders", "/customers", "/suppliers", "/inventory", "/bom", "/production", "/mes", "/shipments"],
-  "Sales Executive": ["/dashboard", "/sales-orders", "/customers", "/inventory", "/shipments"],
-  "Production Manager": ["/dashboard", "/inventory", "/bom", "/production", "/mes"],
-  "Inventory Manager": ["/dashboard", "/suppliers", "/inventory", "/shipments"],
-  Viewer: ["/dashboard"],
-}
-
-function NavItem({ href, label, icon: Icon, collapsed, badge }: {
+function NavItem({
+  href, label, icon: Icon, collapsed, badge,
+}: {
   href: string; label: string; icon: React.ElementType; collapsed: boolean; badge?: number
 }) {
   const pathname = usePathname()
@@ -65,12 +52,12 @@ function NavItem({ href, label, icon: Icon, collapsed, badge }: {
         />
         {!collapsed && <span className="flex-1 truncate">{label}</span>}
         {!collapsed && badge != null && badge > 0 && (
-          <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center">
+          <span className="ml-auto min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500/20 text-amber-500 text-[10px] font-bold flex items-center justify-center">
             {badge}
           </span>
         )}
         {collapsed && badge != null && badge > 0 && (
-          <span className="absolute top-0.5 right-0.5 size-2 rounded-full bg-primary" />
+          <span className="absolute top-0.5 right-0.5 size-2 rounded-full bg-amber-500" />
         )}
       </span>
     </Link>
@@ -79,38 +66,32 @@ function NavItem({ href, label, icon: Icon, collapsed, badge }: {
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { resolvedTheme, setTheme } = useTheme()
-  const [badges, setBadges] = useState<Record<string, number>>({})
+  const [restockBadge, setRestockBadge] = useState(0)
 
-  // Dev Switcher States
-  const [currentUser, setCurrentUser] = useState({ id: "usr-1", name: "Arjun Mehta", email: "arjun@shirtco.in", role: "Admin" })
+  const [currentUser, setCurrentUser] = useState({
+    id: "usr-1", name: "Arjun Mehta", email: "arjun@shirtco.in", role: "Admin",
+  })
   const [showSwitcher, setShowSwitcher] = useState(false)
 
   useEffect(() => {
     const stored = localStorage.getItem("current_user")
     if (stored) {
-      try {
-        setCurrentUser(JSON.parse(stored))
-      } catch { /* ignore */ }
+      try { setCurrentUser(JSON.parse(stored)) } catch { /* ignore */ }
     }
   }, [])
 
+  // Poll for orders that need restock
   useEffect(() => {
-    async function loadBadges() {
+    async function loadBadge() {
       try {
-        const [sos, rms, pos] = await Promise.all([
-          fetch("/api/sales-orders").then((r) => r.json()),
-          fetch("/api/raw-materials").then((r) => r.json()),
-          fetch("/api/production-orders").then((r) => r.json()),
-        ])
-        setBadges({
-          "/sales-orders": sos.filter((s: { status: string }) => ["SUBMITTED", "INVENTORY_CHECK", "APPROVED"].includes(s.status)).length,
-          "/inventory": rms.filter((rm: { currentStock: number; reorderPoint: number }) => rm.currentStock <= rm.reorderPoint).length,
-          "/production": pos.filter((po: { status: string }) => ["PLANNED", "RELEASED", "MATERIAL_RESERVED", "IN_PROGRESS", "QUALITY_CHECK"].includes(po.status)).length,
-        })
+        const res = await fetch("/api/sales-orders").then((r) => r.json())
+        const orders = Array.isArray(res) ? res : (res?.data ?? [])
+        const count = orders.filter((o: { status: string }) => o.status === "NEEDS_RESTOCK").length
+        setRestockBadge(count)
       } catch { /* silently ignore */ }
     }
-    loadBadges()
-    const id = setInterval(loadBadges, 30000)
+    loadBadge()
+    const id = setInterval(loadBadge, 30000)
     return () => clearInterval(id)
   }, [])
 
@@ -121,10 +102,11 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
     window.location.reload()
   }
 
-  const allowedHrefs = ROLE_NAV_ACCESS[currentUser.role] || ["/dashboard"]
-  const mainItems = navItems.filter((n) => n.group === "main" && allowedHrefs.includes(n.href))
-  const opsItems = navItems.filter((n) => n.group === "ops" && allowedHrefs.includes(n.href))
   const initials = currentUser.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+
+  const badges: Record<string, number> = {
+    "/orders": restockBadge,
+  }
 
   return (
     <aside className={cn(
@@ -137,7 +119,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           onClick={onToggle}
           className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white p-1 shadow-md border border-sidebar-border/40 transition-transform hover:scale-105"
         >
-          <img src="/logo.svg" className="size-full object-contain " alt="ShirtCo Logo" />
+          <img src="/logo.svg" className="size-full object-contain" alt="ShirtCo Logo" />
         </button>
         {!collapsed && (
           <div className="min-w-0 flex-1">
@@ -154,27 +136,26 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {!collapsed && (
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/25 px-2.5 mb-1.5">
-            Overview
-          </p>
-        )}
-        {mainItems.map(({ href, label, icon }) => (
-          <NavItem key={href} href={href} label={label} icon={icon} collapsed={collapsed} badge={badges[href]} />
+        {navItems.map(({ href, label, icon }) => (
+          <NavItem
+            key={href}
+            href={href}
+            label={label}
+            icon={icon}
+            collapsed={collapsed}
+            badge={badges[href]}
+          />
         ))}
 
-        <div className="my-2">
-          {!collapsed && (
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/25 px-2.5 mb-1.5 mt-3">
-              Operations
+        {/* Restock alert banner (expanded mode only) */}
+        {!collapsed && restockBadge > 0 && (
+          <div className="mt-3 mx-1 rounded-lg bg-amber-500/10 border border-amber-500/20 px-2.5 py-2 flex items-start gap-2">
+            <Warning size={13} className="text-amber-500 mt-0.5 shrink-0" weight="fill" />
+            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium leading-tight">
+              {restockBadge} order{restockBadge > 1 ? "s" : ""} need restocking
             </p>
-          )}
-          {collapsed && <Separator className="bg-sidebar-border my-2" />}
-        </div>
-
-        {opsItems.map(({ href, label, icon }) => (
-          <NavItem key={href} href={href} label={label} icon={icon} collapsed={collapsed} badge={badges[href]} />
-        ))}
+          </div>
+        )}
       </nav>
 
       <Separator className="bg-sidebar-border" />

@@ -1,12 +1,12 @@
-import { Geist_Mono, Inter, Manrope } from "next/font/google"
+import { Geist_Mono, Inter, Manrope, Roboto, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
 
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-heading" })
-const inter = Inter({ subsets: ['latin'], variable: '--font-sans' })
-const fontMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
+const roboto = Roboto({subsets:['latin'],variable:'--font-sans'})
+const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'})
 
 export const metadata = {
   title: "ShirtCo ERP",
@@ -20,7 +20,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, manrope.variable, "font-sans", inter.variable)}
+      className={cn("antialiased", manrope.variable, roboto.variable, "font-mono", jetbrainsMono.variable)}
     >
       <body>
         <ThemeProvider defaultTheme="dark">

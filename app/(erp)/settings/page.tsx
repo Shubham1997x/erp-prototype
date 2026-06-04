@@ -11,17 +11,13 @@ import type { UserRole, User as UserType } from "@/lib/types"
 const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   Admin: ["All Modules — Full CRUD", "User Management", "Role Management", "Audit Log Access"],
   "Sales Executive": ["Create/Manage Customers", "Create/Manage Sales Orders", "Track Shipments", "Inventory — Read Only"],
-  "Production Manager": ["BOM Management", "Production Order Management", "MES Execution", "Inventory — Read Only"],
   "Inventory Manager": ["Raw Material Management", "Stock Adjustments", "Goods Receipt", "Warehouse Management"],
-  Viewer: ["Dashboard — Read Only", "Reports — Read Only"],
 }
 
 const ROLE_COLOR: Record<UserRole, string> = {
   Admin: "bg-purple-500/10 text-purple-600 dark:text-purple-400",
   "Sales Executive": "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  "Production Manager": "bg-amber-500/10 text-amber-600",
   "Inventory Manager": "bg-emerald-500/10 text-emerald-600",
-  Viewer: "bg-muted text-muted-foreground",
 }
 
 function formatDate(iso: string) {
