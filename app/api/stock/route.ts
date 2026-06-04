@@ -2,6 +2,7 @@ import { getDb } from "@/lib/db"
 import { NextResponse } from "next/server"
 import { requireNotViewer } from "@/lib/auth"
 import { writeAuditLog, checkReplenishment } from "@/lib/audit"
+import { tryAutoFulfillOrdersForProduct } from "@/lib/order-fulfill"
 
 export const dynamic = "force-dynamic"
 
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    db.transaction(() => {
+    const autoFulfilledOrders = db.transaction(() => {
       if (entityType === "raw_material") {
         const rm = db.prepare("SELECT current_stock, name FROM raw_materials WHERE id=?").get(entityId) as
           { current_stock: number; name: string } | undefined
@@ -58,12 +59,23 @@ export async function POST(req: Request) {
         VALUES (?, ?, ?, ?, 'manual_adjustment', ?, ?, ?)
       `).run(entityType, entityId, delta, reason, entityId, auth.id, now)
 
-      // Check if adjustment brings any raw material below reorder point
       if (delta < 0 && entityType === "raw_material") checkReplenishment(db)
+
+      if (entityType === "product" && delta > 0) {
+        return tryAutoFulfillOrdersForProduct(db, {
+          productId: entityId,
+          userId: auth.id,
+          now,
+        })
+          .filter((r) => r.fulfilled)
+          .map((r) => r.orderId)
+      }
+
+      return [] as string[]
     })()
+
+    return NextResponse.json({ ok: true, autoFulfilledOrders })
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 })
   }
-
-  return NextResponse.json({ ok: true })
 }

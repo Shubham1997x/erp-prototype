@@ -17,6 +17,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { toast } from "sonner"
+import { useUser } from "@/hooks/use-user"
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/demo-users"
+import { clearStoredUser, fetchCredentials, getAuthHeaders, storeUser } from "@/lib/client-auth"
+import { cn } from "@/lib/utils"
 
 // Simplified nav — only the 4 core sections
 const NAV_ITEMS = [
@@ -35,39 +39,59 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router   = useRouter()
   const { state } = useSidebar()
 
+  const { user: currentUser, refresh: refreshUser } = useUser()
   const [restockCount, setRestockCount] = useState(0)
-  const [currentUser, setCurrentUser] = useState<{
-    id: string; name: string; email: string; role: string
-  } | null>(null)
+  const [switching, setSwitching] = useState(false)
 
+  // Badge: restock count (skip on orders page — that page already loads orders)
   useEffect(() => {
-    const stored = localStorage.getItem("current_user")
-    if (stored) {
-      try { setCurrentUser(JSON.parse(stored)) } catch { /* ignore */ }
-    }
-  }, [])
-
-  // Badge: count of orders needing restock
-  useEffect(() => {
+    if (!currentUser || pathname.startsWith("/orders")) return
     async function loadBadge() {
       try {
-        const userId = currentUser?.id ?? "usr-1"
-        const userRole = currentUser?.role ?? "Admin"
         const res = await fetch("/api/sales-orders", {
-          headers: { "X-User-Id": userId, "X-User-Role": userRole },
+          credentials: fetchCredentials,
+          headers: getAuthHeaders(),
         }).then((r) => r.json())
         const orders = Array.isArray(res) ? res : (res?.data ?? [])
         setRestockCount(orders.filter((o: { status: string }) => o.status === "NEEDS_RESTOCK").length)
       } catch { /* silently ignore */ }
     }
     loadBadge()
-    const id = setInterval(loadBadge, 30_000)
+    const id = setInterval(loadBadge, 60_000)
     return () => clearInterval(id)
-  }, [currentUser])
+  }, [currentUser, pathname])
+
+  async function handleSwitchAccount(email: string) {
+    if (currentUser?.email === email) return
+    setSwitching(true)
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        credentials: fetchCredentials,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: DEMO_PASSWORD }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error ?? "Could not switch account")
+        return
+      }
+      storeUser(data.user)
+      await refreshUser()
+      toast.success(`Switched to ${data.user.name}`)
+      router.refresh()
+    } catch {
+      toast.error("Failed to switch account")
+    } finally {
+      setSwitching(false)
+    }
+  }
 
   async function handleLogout() {
-    try { await fetch("/api/auth/logout", { method: "POST" }) } catch { /* ignore */ }
-    localStorage.removeItem("current_user")
+    try {
+      await fetch("/api/auth/logout", { method: "POST", credentials: fetchCredentials })
+    } catch { /* ignore */ }
+    clearStoredUser()
     toast.success("Logged out")
     router.push("/login")
   }
@@ -82,19 +106,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader className="pt-3 pb-2 px-4 flex flex-row items-center gap-2">
-        <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow shadow-primary/30 shrink-0 border border-sidebar-border/40">
-          <img src="/logo.svg" className="size-full object-contain" alt="ShirtCo" />
+      <SidebarHeader className="flex flex-row items-center gap-3 border-b border-sidebar-border/50 px-3 pb-3 pt-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
+        <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded-lg border border-sidebar-border/40 bg-primary text-primary-foreground shadow shadow-primary/30 group-data-[collapsible=icon]:size-9">
+          <img src="/logo.svg" className="size-full object-contain p-1" alt="ShirtCo" />
         </div>
-        <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-          <span className="truncate font-heading font-bold text-[13px]">ShirtCo ERP</span>
-          <span className="truncate text-[10px] text-muted-foreground">Shirt Manufacturing</span>
+        <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+          <span className="truncate font-heading text-base font-bold">ShirtCo ERP</span>
+          <span className="truncate text-xs text-muted-foreground">Shirt Manufacturing</span>
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Main Menu</SidebarGroupLabel>
+      <SidebarContent className="group-data-[collapsible=icon]:px-1">
+        <SidebarGroup className="group-data-[collapsible=icon]:px-1">
+          <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wide">
+            Main Menu
+          </SidebarGroupLabel>
           <SidebarMenu>
             {NAV_ITEMS.filter(i => !currentUser || i.roles.includes(currentUser.role)).map((item) => (
               <NavItem
@@ -117,8 +143,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </div>
         )}
 
-        <SidebarGroup>
-          <SidebarGroupLabel>System</SidebarGroupLabel>
+        <SidebarGroup className="group-data-[collapsible=icon]:px-1">
+          <SidebarGroupLabel className="text-xs font-semibold uppercase tracking-wide">
+            System
+          </SidebarGroupLabel>
           <SidebarMenu>
             {SYSTEM_ITEMS.map((item) => (
               <NavItem key={item.url} item={item} pathname={pathname} />
@@ -127,25 +155,26 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border/50 group-data-[collapsible=icon]:p-1">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuButton
                   size="lg"
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                  tooltip={currentUser?.name ?? "Account"}
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:h-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1!"
                 >
-                  <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarFallback className="rounded-lg bg-gradient-to-br from-primary to-violet-600 text-white font-bold text-[11px] shadow shadow-primary/30">
+                  <Avatar className="h-8 w-8 shrink-0 rounded-lg group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:w-9">
+                    <AvatarFallback className="rounded-lg bg-linear-to-br from-primary to-violet-600 text-white font-bold text-[11px] shadow shadow-primary/30">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
+                  <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                     <span className="truncate font-semibold">{currentUser?.name ?? "Guest"}</span>
                     <span className="truncate text-[10px] text-muted-foreground">{currentUser?.role ?? "—"}</span>
                   </div>
-                  <CaretUpDown className="ml-auto size-4" />
+                  <CaretUpDown className="ml-auto size-4 shrink-0 group-data-[collapsible=icon]:hidden" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -157,7 +186,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <DropdownMenuLabel className="p-0 font-normal">
                   <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                     <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarFallback className="rounded-lg bg-gradient-to-br from-primary to-violet-600 text-white font-bold text-xs">
+                      <AvatarFallback className="rounded-lg bg-linear-to-br from-primary to-violet-600 text-white font-bold text-xs">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
@@ -167,6 +196,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </div>
                   </div>
                 </DropdownMenuLabel>
+                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                  Switch account (one browser = one login)
+                </DropdownMenuLabel>
+                {DEMO_ACCOUNTS.map((acc) => (
+                  <DropdownMenuItem
+                    key={acc.email}
+                    disabled={switching || currentUser?.email === acc.email}
+                    onClick={() => handleSwitchAccount(acc.email)}
+                    className="cursor-pointer"
+                  >
+                    <div className="flex flex-col">
+                      <span className="font-medium">{acc.name}</span>
+                      <span className="text-xs text-muted-foreground">{acc.role}</span>
+                    </div>
+                  </DropdownMenuItem>
+                ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/settings" className="cursor-pointer flex items-center gap-2">
@@ -189,6 +234,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   )
 }
 
+const navBtnCollapsed =
+  "group-data-[collapsible=icon]:!size-10 group-data-[collapsible=icon]:!h-10 group-data-[collapsible=icon]:!p-0 group-data-[collapsible=icon]:justify-center"
+
 function NavItem({
   item, pathname, badge,
 }: {
@@ -196,16 +244,33 @@ function NavItem({
   pathname: string
   badge?: number
 }) {
+  const active = pathname === item.url || pathname.startsWith(item.url + "/")
+
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton asChild isActive={pathname === item.url || pathname.startsWith(item.url + "/")}>
-        <Link href={item.url}>
-          <item.icon />
-          <span>{item.name}</span>
+    <SidebarMenuItem className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
+      <SidebarMenuButton
+        asChild
+        size="lg"
+        tooltip={item.name}
+        isActive={active}
+        className={cn(
+          "h-10 text-sm [&_svg]:size-5",
+          navBtnCollapsed
+        )}
+      >
+        <Link
+          href={item.url}
+          className="flex w-full min-w-0 items-center gap-2 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0"
+        >
+          <item.icon
+            className="shrink-0"
+            weight={active ? "fill" : "regular"}
+          />
+          <span className="truncate group-data-[collapsible=icon]:hidden">{item.name}</span>
         </Link>
       </SidebarMenuButton>
       {badge != null && badge > 0 && (
-        <SidebarMenuBadge className="bg-amber-500 !text-white rounded-full text-[10px] font-bold px-1.5 min-w-5 h-5 flex items-center justify-center">
+        <SidebarMenuBadge className="bg-amber-500 text-white! rounded-full text-[10px] font-bold px-1.5 min-w-5 h-5 flex items-center justify-center group-data-[collapsible=icon]:right-0.5 group-data-[collapsible=icon]:top-1 group-data-[collapsible=icon]:h-4 group-data-[collapsible=icon]:min-w-4 group-data-[collapsible=icon]:text-[9px]">
           {badge}
         </SidebarMenuBadge>
       )}

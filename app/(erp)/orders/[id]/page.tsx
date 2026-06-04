@@ -2,17 +2,25 @@
 
 import { useState, useEffect, use } from "react"
 import { useRouter } from "next/navigation"
-import { useFetch, apiPost } from "@/hooks/use-api"
+import { useFetch, apiPost, apiPatch } from "@/hooks/use-api"
+import {
+  NOTIFICATIONS_CHANGED_EVENT,
+  notifyNotificationsChanged,
+} from "@/components/providers/notification-provider"
 import { useUser } from "@/hooks/use-user"
-import type { Customer, Product, SalesOrder, SalesOrderStatus } from "@/lib/types"
+import type { Customer, Product, SalesOrder, SalesOrderLine, SalesOrderStatus } from "@/lib/types"
+import { canEditOrder } from "@/lib/order-edit"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-  ArrowLeft, CheckCircle, Warning, Package, CaretRight, Spinner, Check, XCircle, BellRinging
+  ArrowLeft, CheckCircle, Warning, Package, CaretRight, Spinner, Check, XCircle, BellRinging, Truck, FileArrowDown,
+  PencilSimple, Plus, X, ShoppingCart
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { INVOICE_ELIGIBLE_STATUSES } from "@/lib/invoice-html"
+import { downloadSalesOrderInvoice } from "@/lib/download-invoice"
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v)
@@ -22,25 +30,28 @@ function formatDate(iso: string | null | undefined) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
 }
 
-type SimpleStatus = "pending" | "fulfilled" | "shipping" | "needs_restock" | "cancelled" | "other"
-
-function getSimpleStatus(status: string): SimpleStatus {
-  if (["DELIVERED", "PAID"].includes(status)) return "fulfilled"
-  if (["SHIPPED", "READY_TO_SHIP"].includes(status)) return "shipping"
-  if (status === "NEEDS_RESTOCK") return "needs_restock"
-  if (status === "CANCELLED") return "cancelled"
-  if (["DRAFT", "SUBMITTED", "INVENTORY_CHECK", "APPROVED", "IN_PRODUCTION"].includes(status)) return "pending"
-  return "other"
+const ORDER_STATUS_DISPLAY: Record<string, { label: string; color: string }> = {
+  DRAFT: { label: "Draft", color: "bg-muted text-muted-foreground" },
+  SUBMITTED: { label: "Submitted", color: "bg-blue-500/15 text-blue-500" },
+  INVENTORY_CHECK: { label: "Stock check", color: "bg-blue-500/15 text-blue-500" },
+  APPROVED: { label: "Approved", color: "bg-blue-500/15 text-blue-500" },
+  IN_PRODUCTION: { label: "In production", color: "bg-violet-500/15 text-violet-600 dark:text-violet-400" },
+  CREDIT_HOLD: { label: "Credit hold", color: "bg-orange-500/15 text-orange-600 dark:text-orange-400" },
+  PARTIALLY_FULFILLED: { label: "Partial", color: "bg-violet-500/15 text-violet-600 dark:text-violet-400" },
+  NEEDS_RESTOCK: { label: "Needs restock", color: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
+  READY_TO_SHIP: { label: "Ready to ship", color: "bg-teal-500/15 text-teal-600 dark:text-teal-400" },
+  SHIPPED: { label: "Shipped", color: "bg-sky-500/15 text-sky-600 dark:text-sky-400" },
+  DELIVERED: { label: "Delivered", color: "bg-emerald-500/15 text-emerald-500" },
+  INVOICED: { label: "Invoiced", color: "bg-emerald-500/15 text-emerald-500" },
+  PAID: { label: "Paid", color: "bg-emerald-500/15 text-emerald-500" },
+  DISPUTED: { label: "Disputed", color: "bg-orange-500/15 text-orange-600 dark:text-orange-400" },
+  CANCELLED: { label: "Cancelled", color: "bg-destructive/15 text-destructive" },
 }
 
-const STATUS_UI: Record<SimpleStatus, { label: string; color: string }> = {
-  pending: { label: "Pending", color: "bg-blue-500/15 text-blue-500" },
-  shipping: { label: "Shipping", color: "bg-teal-500/15 text-teal-600 dark:text-teal-400" },
-  fulfilled: { label: "Fulfilled", color: "bg-emerald-500/15 text-emerald-500" },
-  needs_restock: { label: "Needs Restock", color: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
-  cancelled: { label: "Cancelled", color: "bg-destructive/15 text-destructive" },
-  other: { label: "Other", color: "bg-muted text-muted-foreground" },
-}
+const CANCELLABLE: SalesOrderStatus[] = [
+  "DRAFT", "SUBMITTED", "INVENTORY_CHECK", "APPROVED", "IN_PRODUCTION",
+  "CREDIT_HOLD", "NEEDS_RESTOCK", "READY_TO_SHIP", "PARTIALLY_FULFILLED",
+]
 
 interface Shortage {
   productId: string
@@ -55,7 +66,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   const router = useRouter()
   const { id } = use(params)
 
-  const { user, isSales, isInventory, isAdmin } = useUser()
+  const { isSales, isInventory, isAdmin, loading: loadingUser } = useUser()
 
   const { data: order, loading: loadingOrder, refetch } = useFetch<SalesOrder>(`/api/sales-orders/${id}`)
   const { data: customersRes } = useFetch<Customer[] | PaginatedResponse<Customer>>("/api/customers")
@@ -87,6 +98,34 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   const [shipDialog, setShipDialog] = useState(false)
   const [shipForm, setShipForm] = useState({ carrier: "", trackingNumber: "" })
   const [shipping, setShipping] = useState(false)
+  const [markingDelivered, setMarkingDelivered] = useState(false)
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false)
+  const [nudging, setNudging] = useState(false)
+
+  // Edit order
+  const [editOpen, setEditOpen] = useState(false)
+  const [editCustomerId, setEditCustomerId] = useState("")
+  const [editLines, setEditLines] = useState<SalesOrderLine[]>([])
+  const [editNotes, setEditNotes] = useState("")
+  const [editChangeSummary, setEditChangeSummary] = useState("")
+  const [editSaving, setEditSaving] = useState(false)
+
+  // Keep order + notifications fresh for sales while waiting on inventory (no manual reload)
+  useEffect(() => {
+    if (loadingUser || !order || (!isSales && !isAdmin)) return
+    if (order.status !== "NEEDS_RESTOCK") return
+
+    const interval = setInterval(() => void refetch(), 15_000)
+
+    return () => clearInterval(interval)
+  }, [loadingUser, order, isSales, isAdmin, refetch])
+
+  useEffect(() => {
+    if (!order?.id) return
+    const onUpdate = () => void refetch()
+    window.addEventListener(NOTIFICATIONS_CHANGED_EVENT, onUpdate)
+    return () => window.removeEventListener(NOTIFICATIONS_CHANGED_EVENT, onUpdate)
+  }, [order?.id, refetch])
 
   if (loadingOrder) {
     return (
@@ -109,23 +148,64 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   }
 
   const cust = allCustomers.find((c) => c.id === order.customerId)
-  const simple = getSimpleStatus(order.status)
-  const ui = STATUS_UI[simple]
+  const statusUi = ORDER_STATUS_DISPLAY[order.status] ?? { label: order.status, color: "bg-muted text-muted-foreground" }
   const total = order.lines.reduce((acc, l) => acc + l.qty * l.unitPrice, 0)
+  const actionsReady = !loadingUser
 
-  const canCheck = isSales && ["DRAFT", "SUBMITTED", "INVENTORY_CHECK", "APPROVED", "IN_PRODUCTION"].includes(order.status)
+  const canCheck = isSales && ["DRAFT", "SUBMITTED", "INVENTORY_CHECK", "APPROVED", "IN_PRODUCTION", "PARTIALLY_FULFILLED", "CREDIT_HOLD"].includes(order.status)
+  const checkStockLabel =
+    order.status === "APPROVED" || order.status === "IN_PRODUCTION" || order.status === "PARTIALLY_FULFILLED"
+      ? "Verify & Mark Ready to Ship"
+      : "Check Stock & Reserve"
   const canRestock = isInventory && order.status === "NEEDS_RESTOCK"
   const canShip = isSales && order.status === "READY_TO_SHIP"
-  const canCancel = isSales && !["DELIVERED", "CANCELLED", "PAID", "SHIPPED"].includes(order.status)
+  const canMarkDelivered = isSales && order.status === "SHIPPED"
+  const canCancel = isSales && CANCELLABLE.includes(order.status)
+  const canEdit = (isSales || isAdmin) && canEditOrder(order.status)
+  const canDownloadInvoice =
+    (isSales || isAdmin) &&
+    INVOICE_ELIGIBLE_STATUSES.includes(order.status as (typeof INVOICE_ELIGIBLE_STATUSES)[number])
+  const hasHeaderActions =
+    canCheck || canRestock || canShip || canMarkDelivered || canCancel || canDownloadInvoice || canEdit
 
   async function handleCheckStock() {
+    if (!order) return
     setChecking(true)
     try {
-      await apiPost(`/api/sales-orders/${order!.id}/status`, { status: "INVENTORY_CHECK" })
-      toast.success("Stock check initiated")
-      await refetch()
-    } catch (err: any) {
-      toast.error(err.message)
+      const id = order.id
+      let status = order.status
+
+      if (status === "DRAFT") {
+        await apiPatch(`/api/sales-orders/${id}/status`, { status: "SUBMITTED" })
+        status = "SUBMITTED"
+      }
+      if (status === "SUBMITTED") {
+        await apiPatch(`/api/sales-orders/${id}/status`, { status: "INVENTORY_CHECK" })
+        status = "INVENTORY_CHECK"
+      }
+      if (status === "INVENTORY_CHECK") {
+        const result = await apiPatch<{ status: string; shortages?: Shortage[] }>(
+          `/api/sales-orders/${id}/status`,
+          { status: "APPROVED" }
+        )
+        if (result.status === "NEEDS_RESTOCK") {
+          toast.warning("Insufficient stock — order flagged for restock")
+        } else {
+          toast.success("Stock checked and reserved — order approved")
+        }
+        await refetch()
+        return
+      }
+      if (status === "APPROVED" || status === "IN_PRODUCTION") {
+        await apiPatch(`/api/sales-orders/${id}/status`, { status: "READY_TO_SHIP" })
+        toast.success("Stock verified — order ready to ship")
+        await refetch()
+        return
+      }
+
+      toast.error("Cannot check stock from this status")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Stock check failed")
     } finally {
       setChecking(false)
     }
@@ -137,21 +217,31 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     try {
       for (const [prodId, data] of Object.entries(restockForm)) {
         if (data.qty > 0) {
-          await apiPost("/api/stock", {
-            productId: prodId,
+          const stockResult = await apiPost<{ ok: boolean; autoFulfilledOrders?: string[] }>("/api/stock", {
+            entityType: "product",
+            entityId: prodId,
             delta: data.qty,
-            reason: `Restock for order ${order!.id} ${data.invoiceDetails ? '(' + data.invoiceDetails + ')' : ''}`,
-            referenceType: "sales_order",
-            referenceId: order!.id
+            reason: `Restock for order ${order!.id}${data.invoiceDetails ? ` - Invoice: ${data.invoiceDetails}` : ""}`,
           })
+          if (stockResult.autoFulfilledOrders?.length) {
+            notifyNotificationsChanged()
+          }
         }
       }
-      await apiPost(`/api/sales-orders/${order!.id}/status`, { status: "INVENTORY_CHECK" })
-      toast.success("Restock applied and order re-checked")
+      const result = await apiPost<{ status: string; shortages?: Shortage[] }>(
+        `/api/sales-orders/${order!.id}/fulfill`,
+        {}
+      )
       setRestockDialog(null)
       await refetch()
-    } catch (err: any) {
-      toast.error(err.message)
+      if (result.status === "NEEDS_RESTOCK") {
+        toast.warning("Stock added, but the order still has shortages")
+      } else {
+        toast.success("Restock applied — order is ready to ship")
+      }
+      notifyNotificationsChanged()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Restock failed")
     } finally {
       setRestocking(false)
     }
@@ -178,11 +268,129 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
       toast.success("Order shipped")
       setShipDialog(false)
       await refetch()
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to ship order")
     } finally {
       setShipping(false)
     }
+  }
+
+  async function handleMarkDelivered() {
+    setMarkingDelivered(true)
+    try {
+      await apiPatch(`/api/sales-orders/${order!.id}/status`, { status: "DELIVERED" })
+      toast.success("Order marked as delivered")
+      await refetch()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update order")
+    } finally {
+      setMarkingDelivered(false)
+    }
+  }
+
+  async function handleNudgeInventory() {
+    setNudging(true)
+    try {
+      await apiPost(`/api/sales-orders/${order!.id}/nudge`, {})
+      toast.success("Nudge sent to inventory team")
+      notifyNotificationsChanged()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to send nudge")
+    } finally {
+      setNudging(false)
+    }
+  }
+
+  async function handleDownloadInvoice() {
+    setDownloadingInvoice(true)
+    try {
+      await downloadSalesOrderInvoice(order!.id)
+      toast.success("Invoice downloaded")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to download invoice")
+    } finally {
+      setDownloadingInvoice(false)
+    }
+  }
+
+  function openEditDialog() {
+    if (!order) return
+    setEditCustomerId(order.customerId)
+    setEditLines(
+      order.lines.length > 0
+        ? order.lines.map((l) => ({
+            productId: l.productId,
+            qty: l.qty,
+            unitPrice: l.unitPrice,
+          }))
+        : [{ productId: "", qty: 1, unitPrice: 0 }]
+    )
+    setEditNotes(order.notes ?? "")
+    setEditChangeSummary("")
+    setEditOpen(true)
+  }
+
+  function updateEditLine(idx: number, field: keyof SalesOrderLine, value: string | number) {
+    setEditLines((prev) => {
+      const next = [...prev]
+      if (field === "productId") {
+        const prod = allProducts.find((p) => p.id === value)
+        next[idx] = { ...next[idx], productId: value as string, unitPrice: prod?.price ?? next[idx].unitPrice }
+      } else {
+        next[idx] = { ...next[idx], [field]: value }
+      }
+      return next
+    })
+  }
+
+  async function handleAmendOrder() {
+    if (!order) return
+    if (!editChangeSummary.trim()) {
+      toast.error("Describe what you changed")
+      return
+    }
+    if (order.status === "DRAFT" && !editCustomerId) {
+      toast.error("Select a customer")
+      return
+    }
+    if (editLines.some((l) => !l.productId || l.qty <= 0)) {
+      toast.error("Fill in all line items")
+      return
+    }
+    setEditSaving(true)
+    try {
+      await apiPost(`/api/sales-orders/${order.id}/amend`, {
+        changeSummary: editChangeSummary.trim(),
+        lines: editLines,
+        notes: editNotes,
+        ...(order.status === "DRAFT" && editCustomerId ? { customerId: editCustomerId } : {}),
+      })
+      toast.success("Order updated")
+      setEditOpen(false)
+      await refetch()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update order")
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  function openRestockDialog() {
+    const shortages: Shortage[] = order!.lines
+      .map((l) => {
+        const p = allProducts.find((p) => p.id === l.productId)
+        return { productId: l.productId, name: p?.name ?? l.productId, required: l.qty, available: p?.currentStock ?? 0 }
+      })
+      .filter((s) => s.available < s.required)
+    const form: Record<string, { qty: number; invoiceDetails: string }> = {}
+    for (const s of shortages) {
+      form[s.productId] = { qty: Math.max(0, s.required - s.available), invoiceDetails: "" }
+    }
+    setRestockForm(form)
+    setRestockDialog(shortages.length > 0 ? shortages : order!.lines.map((l) => {
+      const p = allProducts.find((x) => x.id === l.productId)
+      return { productId: l.productId, name: p?.name ?? l.productId, required: l.qty, available: p?.currentStock ?? 0 }
+    }))
   }
 
   return (
@@ -201,49 +409,78 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <h1 className="text-3xl font-heading font-bold font-mono">{order.id}</h1>
-            <span className={cn("px-3 py-1 rounded-full text-sm font-semibold tracking-wide", ui.color)}>
-              {ui.label}
+            <h1 className="text-3xl font-bold font-mono">{order.id}</h1>
+            <span className={cn("px-3 py-1 rounded-full text-sm font-semibold tracking-wide", statusUi.color)}>
+              {statusUi.label}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            {canCheck && (
-              <Button onClick={handleCheckStock} disabled={checking} className="gap-2 bg-primary/90 hover:bg-primary shadow-sm">
-                {checking ? <Spinner size={16} className="animate-spin" /> : <Check size={16} weight="bold" />}
-                Check Stock & Reserve
-              </Button>
-            )}
-
-            {canRestock && (
-              <Button onClick={() => {
-                const shortages: Shortage[] = order.lines
-                  .map((l) => {
-                    const p = allProducts.find((p) => p.id === l.productId)
-                    return { productId: l.productId, name: p?.name ?? l.productId, required: l.qty, available: p?.currentStock ?? 0 }
-                  })
-                  .filter((s) => s.available < s.required)
-                const form: Record<string, { qty: number; invoiceDetails: string }> = {}
-                for (const s of shortages) {
-                  form[s.productId] = { qty: s.required - s.available, invoiceDetails: "" }
-                }
-                setRestockForm(form)
-                setRestockDialog(shortages)
-              }} className="gap-2 bg-amber-600 hover:bg-amber-700 text-white shadow-sm">
-                <Package size={16} /> Fulfill Restock
-              </Button>
-            )}
-
-            {canShip && (
-              <Button onClick={() => { setShipForm({ carrier: "", trackingNumber: "" }); setShipDialog(true) }} className="gap-2 bg-teal-600 hover:bg-teal-700 text-white shadow-sm">
-                <Package size={16} /> Ship Order
-              </Button>
-            )}
-
-            {canCancel && (
-              <Button variant="outline" onClick={() => setCancelDialog(true)} className="gap-2 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive">
-                <XCircle size={16} /> Cancel
-              </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {!actionsReady ? (
+              <>
+                <div className="shimmer h-9 w-36 rounded-md" />
+                <div className="shimmer h-9 w-28 rounded-md" />
+              </>
+            ) : (
+              <>
+                {canEdit && (
+                  <Button variant="outline" onClick={openEditDialog} className="gap-2">
+                    <PencilSimple size={16} /> Edit Order
+                  </Button>
+                )}
+                {canCheck && (
+                  <Button onClick={handleCheckStock} disabled={checking} className="gap-2 bg-primary/90 hover:bg-primary shadow-sm">
+                    {checking ? <Spinner size={16} className="animate-spin" /> : <Check size={16} weight="bold" />}
+                    {checkStockLabel}
+                  </Button>
+                )}
+                {canRestock && (
+                  <Button onClick={openRestockDialog} className="gap-2 bg-amber-600 hover:bg-amber-700 text-white shadow-sm">
+                    <Package size={16} /> Fulfill Restock
+                  </Button>
+                )}
+                {canShip && (
+                  <Button
+                    onClick={() => { setShipForm({ carrier: "", trackingNumber: "" }); setShipDialog(true) }}
+                    className="gap-2 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
+                  >
+                    <Truck size={16} /> Ship Order
+                  </Button>
+                )}
+                {canMarkDelivered && (
+                  <Button
+                    onClick={handleMarkDelivered}
+                    disabled={markingDelivered}
+                    className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                  >
+                    {markingDelivered ? <Spinner size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                    Mark Delivered
+                  </Button>
+                )}
+                {canCancel && (
+                  <Button variant="outline" onClick={() => setCancelDialog(true)} className="gap-2 text-destructive border-destructive/20 hover:bg-destructive/10 hover:text-destructive">
+                    <XCircle size={16} /> Cancel Order
+                  </Button>
+                )}
+                {canDownloadInvoice && (
+                  <Button
+                    variant="outline"
+                    onClick={handleDownloadInvoice}
+                    disabled={downloadingInvoice}
+                    className="gap-2"
+                  >
+                    {downloadingInvoice ? (
+                      <Spinner size={16} className="animate-spin" />
+                    ) : (
+                      <FileArrowDown size={16} />
+                    )}
+                    Download Invoice
+                  </Button>
+                )}
+                {!hasHeaderActions && (
+                  <span className="text-xs text-muted-foreground px-2">No actions for this status</span>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -353,17 +590,138 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
         {/* Right Column: Timeline & Logistics */}
         <div className="space-y-6">
+          {actionsReady && order.status === "READY_TO_SHIP" && isSales && (
+            <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 p-5 shadow-sm">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-teal-500/20 flex items-center justify-center shrink-0">
+                  <Truck size={20} className="text-teal-600 dark:text-teal-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-teal-900 dark:text-teal-100">Ready to ship</h3>
+                  <p className="text-sm text-teal-700 dark:text-teal-400 mt-0.5">
+                    Stock is available. Add carrier and tracking to ship this order.
+                  </p>
+                </div>
+              </div>
+              <Button
+                className="w-full gap-2 bg-teal-600 hover:bg-teal-700 text-white"
+                onClick={() => { setShipForm({ carrier: "", trackingNumber: "" }); setShipDialog(true) }}
+              >
+                <Truck size={16} /> Ship Order
+              </Button>
+            </div>
+          )}
+
+          {actionsReady && order.status === "READY_TO_SHIP" && isInventory && !isSales && (
+            <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 p-5 shadow-sm">
+              <h3 className="font-bold text-teal-900 dark:text-teal-100 text-sm">Restock complete</h3>
+              <p className="text-sm text-teal-700 dark:text-teal-400 mt-1">
+                This order is ready for the sales team to ship.
+              </p>
+            </div>
+          )}
+
+          {actionsReady && canDownloadInvoice && (
+            <div className="rounded-xl border bg-card p-5 shadow-sm">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Billing</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Download a printable tax invoice for this order.
+              </p>
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleDownloadInvoice}
+                disabled={downloadingInvoice}
+              >
+                {downloadingInvoice ? (
+                  <Spinner size={16} className="animate-spin" />
+                ) : (
+                  <FileArrowDown size={16} />
+                )}
+                Download Invoice
+              </Button>
+            </div>
+          )}
+
+          {actionsReady && order.status === "SHIPPED" && isSales && (
+            <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 p-5 shadow-sm">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center shrink-0">
+                  <Truck size={20} className="text-sky-600 dark:text-sky-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sky-900 dark:text-sky-100">In transit</h3>
+                  <p className="text-sm text-sky-700 dark:text-sky-400 mt-0.5">
+                    Confirm delivery once the customer receives the order.
+                  </p>
+                </div>
+              </div>
+              <Button
+                className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={handleMarkDelivered}
+                disabled={markingDelivered}
+              >
+                {markingDelivered ? <Spinner size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                Mark Delivered
+              </Button>
+            </div>
+          )}
+
           {(!canRestock && order.status === "NEEDS_RESTOCK") && (() => {
-            const shortages = order.lines
-              .map((l) => {
-                const p = allProducts.find((p) => p.id === l.productId)
-                return { name: p?.name ?? l.productId, required: l.qty, available: p?.currentStock ?? 0, sku: p?.sku, image: p?.imageUrl }
+            // Aggregate quantities by product ID to correctly calculate shortages
+            const aggregatedQty: Record<string, number> = {}
+            for (const l of order.lines) {
+              aggregatedQty[l.productId] = (aggregatedQty[l.productId] || 0) + l.qty
+            }
+
+            const shortages = Object.entries(aggregatedQty)
+              .map(([productId, required]) => {
+                const p = allProducts.find((p) => p.id === productId)
+                return { name: p?.name ?? productId, required, available: p?.currentStock ?? 0, sku: p?.sku, image: p?.imageUrl }
               })
               .filter((s) => s.available < s.required)
 
+            if (shortages.length === 0) {
+              return (
+                <div className="rounded-xl border border-teal-200 bg-teal-50/50 dark:border-teal-500/30 dark:bg-teal-500/5 shadow-sm overflow-hidden relative">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-teal-400 to-emerald-500" />
+                  
+                  <div className="p-5">
+                    <div className="flex items-start gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-500/20 flex items-center justify-center shrink-0">
+                        <CheckCircle size={20} className="text-teal-600 dark:text-teal-500" weight="duotone" />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-teal-900 dark:text-teal-100 text-base">Stock Available</h3>
+                        <p className="text-sm text-teal-700 dark:text-teal-400 mt-0.5">
+                          Inventory has sufficient stock for this order. Please notify the inventory team to fulfill it.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-5 pt-4 border-t border-teal-200/60 dark:border-teal-500/20 flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        disabled={nudging}
+                        className="w-full bg-white hover:bg-teal-50 text-teal-700 border-teal-200 dark:bg-transparent dark:hover:bg-teal-500/10 dark:text-teal-400 dark:border-teal-500/30"
+                        onClick={handleNudgeInventory}
+                      >
+                        {nudging ? (
+                          <Spinner size={14} className="mr-2 animate-spin" />
+                        ) : (
+                          <BellRinging size={14} className="mr-2" />
+                        )}
+                        Nudge Inventory
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+
             return (
               <div className="rounded-xl border border-amber-200 bg-amber-50/50 dark:border-amber-500/30 dark:bg-amber-500/5 shadow-sm overflow-hidden relative">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-500" />
+                <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-amber-400 to-orange-500" />
                 
                 <div className="p-5">
                   <div className="flex items-start gap-3 mb-4">
@@ -407,10 +765,16 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                     <Button 
                       size="sm" 
                       variant="outline" 
+                      disabled={nudging}
                       className="w-full bg-white hover:bg-amber-50 text-amber-700 border-amber-200 dark:bg-transparent dark:hover:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30"
-                      onClick={() => toast.success("Nudge sent to Inventory Team!")}
+                      onClick={handleNudgeInventory}
                     >
-                      <BellRinging size={14} className="mr-2" /> Nudge Inventory
+                      {nudging ? (
+                        <Spinner size={14} className="mr-2 animate-spin" />
+                      ) : (
+                        <BellRinging size={14} className="mr-2" />
+                      )}
+                      Nudge Inventory
                     </Button>
                   </div>
                 </div>
@@ -448,8 +812,11 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <div className="font-medium">{formatDate(order.updatedAt)}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground mb-1">Created By</div>
-                <div className="font-medium">{order.createdBy}</div>
+                <div className="text-xs text-muted-foreground mb-1">Sales rep</div>
+                <div className="font-medium">{order.salesPersonName ?? order.createdBy ?? "—"}</div>
+                {order.salesPersonId && (
+                  <div className="text-[11px] font-mono text-muted-foreground mt-0.5">{order.salesPersonId}</div>
+                )}
               </div>
             </div>
           </div>
@@ -457,6 +824,141 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
       </div>
 
       {/* Dialogs */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <ShoppingCart size={18} className="text-primary" /> Edit Order
+            </DialogTitle>
+          </DialogHeader>
+          <div className="min-w-0 space-y-4 py-2">
+            <p className="text-xs text-muted-foreground rounded-lg bg-muted/40 px-3 py-2">
+              Editable while status is <span className="font-semibold text-foreground">{statusUi.label}</span>.
+              {order.status !== "DRAFT" && " Customer cannot be changed after draft."}
+            </p>
+            {order.status === "DRAFT" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customer *</label>
+                <select
+                  value={editCustomerId}
+                  onChange={(e) => setEditCustomerId(e.target.value)}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="">— Select Customer —</option>
+                  {allCustomers.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block">
+                Order Lines *
+              </label>
+              <div className="min-w-0 space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                {editLines.map((line, idx) => (
+                  <div key={idx} className="min-w-0 space-y-2 rounded-lg border border-border/60 p-2">
+                    <select
+                      value={line.productId}
+                      onChange={(e) => updateEditLine(idx, "productId", e.target.value)}
+                      className="w-full min-w-0 rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs"
+                    >
+                      <option value="">— Product —</option>
+                      {allProducts.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} (Stock: {p.currentStock})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        value={line.qty}
+                        onChange={(e) => updateEditLine(idx, "qty", parseInt(e.target.value, 10) || 1)}
+                        className="w-16 shrink-0 rounded-lg border border-input bg-background px-2 py-1.5 text-xs text-center font-bold"
+                        placeholder="Qty"
+                      />
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={line.unitPrice}
+                        onChange={(e) => updateEditLine(idx, "unitPrice", parseFloat(e.target.value) || 0)}
+                        className="w-24 shrink-0 rounded-lg border border-input bg-background px-2 py-1.5 text-xs"
+                        title="Unit price"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-right text-[11px] font-bold text-muted-foreground">
+                        {line.unitPrice > 0 ? formatINR(line.qty * line.unitPrice) : "—"}
+                      </span>
+                      {editLines.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setEditLines((l) => l.filter((_, i) => i !== idx))}
+                          className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 w-full border-dashed"
+                onClick={() => setEditLines((l) => [...l, { productId: "", qty: 1, unitPrice: 0 }])}
+              >
+                <Plus size={12} /> Add Line
+              </Button>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</label>
+              <textarea
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none"
+                placeholder="Internal notes…"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What changed? *</label>
+              <input
+                value={editChangeSummary}
+                onChange={(e) => setEditChangeSummary(e.target.value)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                placeholder="e.g. Increased qty on line 2, updated notes"
+              />
+            </div>
+            {editLines.some((l) => l.unitPrice > 0) && (
+              <div className="rounded-lg bg-muted/30 px-4 py-2.5 flex items-center justify-between">
+                <span className="text-xs text-muted-foreground font-medium">Order Total</span>
+                <span className="font-bold text-sm">
+                  {formatINR(editLines.reduce((s, l) => s + l.qty * l.unitPrice, 0))}
+                </span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAmendOrder}
+              disabled={
+                editSaving ||
+                !editChangeSummary.trim() ||
+                editLines.some((l) => !l.productId || l.qty <= 0) ||
+                (order.status === "DRAFT" && !editCustomerId)
+              }
+            >
+              {editSaving && <Spinner size={14} className="animate-spin mr-1" />}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={cancelDialog} onOpenChange={setCancelDialog}>
         <DialogContent>
           <DialogHeader>
@@ -552,7 +1054,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShipDialog(false)}>Cancel</Button>
-            <Button onClick={handleShip} disabled={shipping || !shipForm.carrier || !shipForm.trackingNumber} className="bg-teal-600 hover:bg-teal-700 text-white">
+            <Button onClick={handleShip} disabled={shipping || !shipForm.carrier.trim()} className="bg-teal-600 hover:bg-teal-700 text-white">
               {shipping ? <Spinner size={16} className="animate-spin mr-2" /> : null} Confirm Shipment
             </Button>
           </DialogFooter>

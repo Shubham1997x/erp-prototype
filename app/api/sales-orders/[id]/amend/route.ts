@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db"
 import { requireNotViewer } from "@/lib/auth"
 import { writeAuditLog } from "@/lib/audit"
 import { newId } from "@/lib/core"
+import { canEditOrder } from "@/lib/order-edit"
 
 export const dynamic = "force-dynamic"
 
@@ -30,10 +31,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   if (!order) return NextResponse.json({ error: "Sales order not found" }, { status: 404 })
 
+  if (!auth.isSales && !auth.isAdmin) {
+    return NextResponse.json({ error: "Only sales or admin can edit orders" }, { status: 403 })
+  }
+
+  if (!canEditOrder(order.status as import("@/lib/types").SalesOrderStatus)) {
+    return NextResponse.json(
+      { error: `Order cannot be edited in ${order.status} status` },
+      { status: 400 }
+    )
+  }
+
   let body: {
     changeSummary: string
     lines?: Array<{ productId: string; qty: number; unitPrice: number }>
     notes?: string
+    customerId?: string
   }
   try {
     body = await req.json()
@@ -41,18 +54,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const { changeSummary, lines, notes } = body
+  const { changeSummary, lines, notes, customerId } = body
 
   if (!changeSummary || !changeSummary.trim()) {
     return NextResponse.json({ error: "changeSummary is required" }, { status: 400 })
   }
 
-  // Lines can only be replaced for DRAFT orders
-  if (lines && order.status !== "DRAFT") {
+  if (customerId && order.status !== "DRAFT") {
     return NextResponse.json(
-      { error: `Cannot replace lines on a ${order.status} order. Only DRAFT orders support line replacement.` },
+      { error: "Customer can only be changed while the order is in DRAFT status" },
       { status: 400 }
     )
+  }
+
+  if (customerId) {
+    const customer = db.prepare("SELECT id FROM customers WHERE id=? AND is_active=1").get(customerId)
+    if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 })
   }
 
   if (lines) {
@@ -95,6 +112,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (notes !== undefined) {
       orderUpdates.push("notes = ?")
       orderValues.push(notes)
+    }
+
+    if (customerId) {
+      orderUpdates.push("customer_id = ?")
+      orderValues.push(customerId)
     }
 
     orderValues.push(id)

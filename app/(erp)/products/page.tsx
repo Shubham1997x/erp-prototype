@@ -1,15 +1,18 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useFetch, apiPost } from "@/hooks/use-api"
+import { useFetch, apiPost, apiPatch } from "@/hooks/use-api"
+import { useUser } from "@/hooks/use-user"
 import type { Product } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Package, Warning, CheckCircle, Spinner, ArrowUp } from "@phosphor-icons/react"
+import { Plus, Package, Warning, CheckCircle, Spinner, ArrowUp, Eye, PencilSimple } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { notifyNotificationsChanged } from "@/components/providers/notification-provider"
+import { restockToastMessage, type StockAdjustResponse } from "@/lib/stock-restock"
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v)
@@ -19,14 +22,7 @@ export default function ProductsPage() {
   const router = useRouter()
   const { data: productsRes, loading, refetch } = useFetch<Product[] | { data: Product[] }>("/api/products")
 
-  // Current user for RBAC
-  const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
-  useEffect(() => {
-    const stored = localStorage.getItem("current_user")
-    if (stored) {
-      try { setCurrentUser(JSON.parse(stored)) } catch { }
-    }
-  }, [])
+  const { user: currentUser } = useUser()
 
   // Add product
   const [addOpen, setAddOpen] = useState(false)
@@ -58,12 +54,23 @@ export default function ProductsPage() {
     }
   }
 
+  // Edit product
+  const [editDialog, setEditDialog] = useState<Product | null>(null)
+  const [editForm, setEditForm] = useState({
+    name: "",
+    sku: "",
+    price: 0,
+    unitOfMeasure: "pcs",
+    imageUrl: "",
+  })
+
   // Add stock (restock)
   const [stockDialog, setStockDialog] = useState<Product | null>(null)
   const [stockQty, setStockQty] = useState(0)
   const [stockInvoiceDetails, setStockInvoiceDetails] = useState("")
 
   const [saving, setSaving] = useState(false)
+  const canManage = !currentUser || currentUser.role === "Admin" || currentUser.role === "Inventory Manager"
 
   function unwrap<T>(res: { data: T[] } | T[] | null | undefined): T[] {
     if (!res) return []
@@ -94,17 +101,71 @@ export default function ProductsPage() {
     }
   }
 
+  function openEdit(product: Product) {
+    setEditDialog(product)
+    setEditForm({
+      name: product.name,
+      sku: product.sku ?? "",
+      price: product.price,
+      unitOfMeasure: product.unitOfMeasure ?? "pcs",
+      imageUrl: product.imageUrl ?? "",
+    })
+  }
+
+  async function handleEditProduct() {
+    if (!editDialog) return
+    if (!editForm.name.trim()) {
+      toast.error("Product name is required")
+      return
+    }
+    if (editForm.price <= 0) {
+      toast.error("Price must be greater than 0")
+      return
+    }
+    setSaving(true)
+    try {
+      await apiPatch(`/api/products/${editDialog.id}`, editForm)
+      toast.success("Product updated")
+      setEditDialog(null)
+      refetch()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update product")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleEditImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingImage(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/upload", { method: "POST", body: formData })
+      if (!res.ok) throw new Error("Upload failed")
+      const data = await res.json()
+      setEditForm((prev) => ({ ...prev, imageUrl: data.url }))
+      toast.success("Image updated")
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Upload failed")
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
   async function handleAddStock() {
     if (!stockDialog || stockQty <= 0) { toast.error("Enter a quantity greater than 0"); return }
     setSaving(true)
     try {
-      await apiPost("/api/stock", {
+      const result = await apiPost<StockAdjustResponse>("/api/stock", {
         entityType: "product",
         entityId: stockDialog.id,
         delta: stockQty,
         reason: `Manual restock${stockInvoiceDetails ? ` - Invoice: ${stockInvoiceDetails}` : ""}`,
       })
-      toast.success(`Added ${stockQty} units to ${stockDialog.name}`)
+      toast.success(restockToastMessage(stockQty, stockDialog.name, result.autoFulfilledOrders))
+      if (result.autoFulfilledOrders?.length) notifyNotificationsChanged()
       setStockDialog(null)
       setStockQty(0)
       setStockInvoiceDetails("")
@@ -171,9 +232,7 @@ export default function ProductsPage() {
               <TableHead className="font-semibold text-xs">In Stock</TableHead>
               <TableHead className="font-semibold text-xs">Stock Value</TableHead>
               <TableHead className="font-semibold text-xs">Status</TableHead>
-              {(!currentUser || currentUser.role === "Admin" || currentUser.role === "Inventory Manager") && (
-                <TableHead className="font-semibold text-xs text-center">Actions</TableHead>
-              )}
+                    <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -199,8 +258,7 @@ export default function ProductsPage() {
               return (
                 <TableRow
                   key={p.id}
-                  className={cn("hover:bg-muted/20 transition-colors cursor-pointer", isLow && "bg-amber-500/3")}
-                  onClick={() => router.push(`/products/${p.id}`)}
+                  className={cn("hover:bg-muted/20 transition-colors", isLow && "bg-amber-500/3")}
                 >
                   <TableCell>
                     <div className="w-10 h-10 rounded-md border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden">
@@ -238,23 +296,42 @@ export default function ProductsPage() {
                       {isLow ? "⚠ Low Stock" : "✓ In Stock"}
                     </span>
                   </TableCell>
-                  {(!currentUser || currentUser.role === "Admin" || currentUser.role === "Inventory Manager") && (
-                    <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
                       <Button
-                        variant="outline"
-                        size="xs"
-                        className="gap-1.5"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setStockDialog(p)
-                          setStockQty(0)
-                          setStockInvoiceDetails("")
-                        }}
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1"
+                        onClick={() => router.push(`/products/${p.id}`)}
                       >
-                        <ArrowUp size={12} weight="bold" /> Add Stock
+                        <Eye size={14} /> View
                       </Button>
-                    </TableCell>
-                  )}
+                      {canManage && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1"
+                            onClick={() => openEdit(p)}
+                          >
+                            <PencilSimple size={14} /> Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1"
+                            onClick={() => {
+                              setStockDialog(p)
+                              setStockQty(0)
+                              setStockInvoiceDetails("")
+                            }}
+                          >
+                            <ArrowUp size={12} weight="bold" /> Restock
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
                 </TableRow>
               )
             })}
@@ -356,12 +433,98 @@ export default function ProductsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Edit Product Dialog ──────────────────────────────────────────────── */}
+      <Dialog open={!!editDialog} onOpenChange={(o) => !o && setEditDialog(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <PencilSimple size={18} className="text-primary" /> Edit Product
+            </DialogTitle>
+          </DialogHeader>
+          {editDialog && (
+            <div className="space-y-3 py-2">
+              <p className="text-xs text-muted-foreground">
+                Stock: <span className="font-bold text-foreground">{editDialog.currentStock} {editDialog.unitOfMeasure}</span>
+                {" · "}use Restock to change quantity
+              </p>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Product Name *</label>
+                <input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SKU</label>
+                <input
+                  value={editForm.sku}
+                  onChange={(e) => setEditForm({ ...editForm, sku: e.target.value })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Price (₹) *</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editForm.price}
+                    onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) || 0 })}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-bold"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unit</label>
+                  <select
+                    value={editForm.unitOfMeasure}
+                    onChange={(e) => setEditForm({ ...editForm, unitOfMeasure: e.target.value })}
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="pcs">pcs</option>
+                    <option value="units">units</option>
+                    <option value="sets">sets</option>
+                    <option value="boxes">boxes</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Image</label>
+                <div className="flex items-center gap-3">
+                  {editForm.imageUrl ? (
+                    <img src={editForm.imageUrl} alt="" className="w-10 h-10 rounded border object-cover" />
+                  ) : (
+                    <div className="w-10 h-10 rounded border bg-muted flex items-center justify-center">
+                      <Package size={16} className="text-muted-foreground" />
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleEditImageUpload}
+                    disabled={uploadingImage}
+                    className="w-full text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialog(null)}>Cancel</Button>
+            <Button onClick={handleEditProduct} disabled={saving || !editForm.name.trim() || editForm.price <= 0}>
+              {saving && <Spinner size={14} className="animate-spin mr-1" />}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Add Stock Dialog ─────────────────────────────────────────────────── */}
       <Dialog open={!!stockDialog} onOpenChange={(o) => !o && setStockDialog(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="font-heading flex items-center gap-2">
-              <ArrowUp size={18} className="text-emerald-500" weight="bold" /> Add Stock
+              <ArrowUp size={18} className="text-emerald-500" weight="bold" /> Restock
             </DialogTitle>
           </DialogHeader>
           {stockDialog && (

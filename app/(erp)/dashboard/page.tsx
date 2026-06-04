@@ -9,7 +9,11 @@ import { ShoppingCart, Package, Users, Warning, CheckCircle, ArrowRight, TrendUp
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis, PieChart, Pie, Cell, ResponsiveContainer } from "recharts"
+import {
+  Bar, BarChart, CartesianGrid, XAxis, YAxis,
+  PieChart, Pie, Cell,
+  RadialBarChart, RadialBar, PolarGrid,
+} from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
 
 function formatINR(v: number) {
@@ -37,13 +41,28 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELLED: "bg-destructive/15 text-destructive",
 }
 
-const statusConfig = {
+/** Distinct color per order status for charts (avoids grey fallback for unknown keys). */
+const ORDER_STATUS_CHART: Record<string, { label: string; color: string }> = {
   DELIVERED: { label: "Delivered", color: "var(--chart-1)" },
+  PAID: { label: "Paid", color: "oklch(0.55 0.16 145)" },
+  INVOICED: { label: "Invoiced", color: "oklch(0.6 0.14 165)" },
+  SHIPPED: { label: "Shipped", color: "oklch(0.62 0.14 240)" },
+  READY_TO_SHIP: { label: "Ready to ship", color: "oklch(0.68 0.12 185)" },
   APPROVED: { label: "Approved", color: "var(--chart-2)" },
-  NEEDS_RESTOCK: { label: "Restock", color: "var(--chart-3)" },
+  IN_PRODUCTION: { label: "In production", color: "oklch(0.58 0.2 305)" },
+  PARTIALLY_FULFILLED: { label: "Partial", color: "oklch(0.62 0.18 320)" },
+  NEEDS_RESTOCK: { label: "Needs restock", color: "oklch(0.72 0.16 75)" },
+  INVENTORY_CHECK: { label: "Stock check", color: "oklch(0.65 0.12 255)" },
   SUBMITTED: { label: "Submitted", color: "var(--chart-4)" },
-  CANCELLED: { label: "Cancelled", color: "var(--chart-5)" },
-} satisfies ChartConfig
+  DRAFT: { label: "Draft", color: "oklch(0.78 0.01 286)" },
+  CREDIT_HOLD: { label: "Credit hold", color: "oklch(0.7 0.18 55)" },
+  DISPUTED: { label: "Disputed", color: "oklch(0.65 0.2 45)" },
+  CANCELLED: { label: "Cancelled", color: "var(--destructive)" },
+}
+
+const statusChartConfig = Object.fromEntries(
+  Object.entries(ORDER_STATUS_CHART).map(([key, { label, color }]) => [key, { label, color }])
+) satisfies ChartConfig
 
 const stockConfig = {
   high: { label: "Healthy Stock", color: "var(--chart-2)" },
@@ -97,22 +116,43 @@ export default function DashboardPage() {
   // Chart 2: Order Status Distribution
   const statusData = useMemo(() => {
     const counts: Record<string, number> = {}
-    sos.forEach(so => counts[so.status] = (counts[so.status] || 0) + 1)
-    return Object.entries(counts).map(([status, count]) => ({
-      status,
-      count,
-      fill: (statusConfig as any)[status]?.color || "var(--muted)"
-    }))
+    sos.forEach((so) => {
+      counts[so.status] = (counts[so.status] || 0) + 1
+    })
+    return Object.entries(counts).map(([status, count], index) => {
+      const meta = ORDER_STATUS_CHART[status]
+      const palette = [
+        "var(--chart-1)",
+        "var(--chart-2)",
+        "var(--chart-3)",
+        "var(--chart-4)",
+        "var(--chart-5)",
+      ]
+      return {
+        status,
+        count,
+        fill: meta?.color ?? palette[index % palette.length],
+      }
+    })
   }, [sos])
 
-  // Chart 3: Stock Distribution
-  const stockData = useMemo(() => {
+  // Chart 3: Stock radial bars (healthy / low / out)
+  const stockRadialData = useMemo(() => {
     return [
-      { category: "Healthy Stock", count: inStockProds.length, fill: stockConfig.high.color },
-      { category: "Low Stock", count: lowStockProds.length, fill: stockConfig.low.color },
-      { category: "Out of Stock", count: outOfStockProds.length, fill: stockConfig.out.color },
-    ].filter(d => d.count > 0)
+      { stockKey: "high", category: "Healthy Stock", count: inStockProds.length },
+      { stockKey: "low", category: "Low Stock", count: lowStockProds.length },
+      { stockKey: "out", category: "Out of Stock", count: outOfStockProds.length },
+    ]
+      .filter((d) => d.count > 0)
+      .map((d) => ({
+        ...d,
+        fill: `var(--color-${d.stockKey})`,
+      }))
   }, [inStockProds, lowStockProds, outOfStockProds])
+
+  const stockHealthPct = prods.length > 0
+    ? Math.round((inStockProds.length / prods.length) * 100)
+    : 0
 
   // Chart 4: Top 5 Products by Revenue
   const topProductsData = useMemo(() => {
@@ -169,7 +209,7 @@ export default function DashboardPage() {
                 <div className={cn("text-2xl font-bold font-mono", needsRestock.length > 0 && "text-amber-500")}>
                   {needsRestock.length}
                 </div>
-                <Link href="/orders" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 mt-1">
+                <Link href="/orders#needs_restock" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 mt-1">
                   View blocked <ArrowRight size={10} />
                 </Link>
               </>
@@ -306,8 +346,11 @@ export default function DashboardPage() {
                         <p className="text-sm font-semibold leading-none truncate">
                           {customer?.name ?? "Unknown"}
                         </p>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-[10px] text-muted-foreground truncate">{formatDate(so.createdAt)}</p>
+                          {so.salesPersonName && (
+                            <p className="text-[10px] text-muted-foreground truncate">· {so.salesPersonName}</p>
+                          )}
                           <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${statusColor}`}>
                             {so.status.replace(/_/g, " ")}
                           </span>
@@ -335,18 +378,40 @@ export default function DashboardPage() {
             <CardDescription>Distribution of all orders</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 pb-0">
-            <ChartContainer config={statusConfig} className="mx-auto aspect-square max-h-[200px] w-full">
+            <ChartContainer config={statusChartConfig} className="mx-auto aspect-square max-h-[220px] w-full">
               <PieChart>
-                <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                <ChartTooltip
+                  cursor={false}
+                  content={
+                    <ChartTooltipContent
+                      hideLabel
+                      nameKey="status"
+                      formatter={(value, name) => {
+                        const label = ORDER_STATUS_CHART[String(name)]?.label ?? String(name)
+                        return (
+                          <span className="font-mono font-medium">
+                            {label}: {value}
+                          </span>
+                        )
+                      }}
+                    />
+                  }
+                />
                 <Pie
                   data={statusData}
                   dataKey="count"
                   nameKey="status"
                   innerRadius={45}
                   outerRadius={65}
-                  strokeWidth={5}
+                  strokeWidth={2}
+                  stroke="var(--background)"
                   paddingAngle={2}
-                />
+                >
+                  {statusData.map((entry) => (
+                    <Cell key={entry.status} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <ChartLegend content={<ChartLegendContent nameKey="status" />} />
               </PieChart>
             </ChartContainer>
           </CardContent>
@@ -387,31 +452,64 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Inventory Stock Pie (1 col) */}
+        {/* Inventory stock radial chart (1 col) */}
         <Card className="col-span-1 shadow-sm flex flex-col">
           <CardHeader className="items-center pb-2">
             <CardTitle>Inventory Health</CardTitle>
-            <CardDescription>Current stock distribution</CardDescription>
+            <CardDescription>Stock levels by product count</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 pb-0">
-            <ChartContainer config={stockConfig} className="mx-auto aspect-square max-h-[200px] w-full">
-              <PieChart>
-                <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-                <Pie
-                  data={stockData}
-                  dataKey="count"
-                  nameKey="category"
-                  innerRadius={40}
-                  outerRadius={65}
-                  strokeWidth={2}
-                  paddingAngle={5}
-                />
-              </PieChart>
-            </ChartContainer>
+          <CardContent className="relative flex-1 pb-0">
+            {stockRadialData.length > 0 ? (
+              <>
+                <ChartContainer config={stockConfig} className="mx-auto aspect-square max-h-[220px] w-full">
+                  <PieChart>
+                    <ChartTooltip
+                      cursor={false}
+                      content={
+                        <ChartTooltipContent
+                          hideLabel
+                          nameKey="category"
+                          formatter={(value) => (
+                            <span className="font-mono font-medium">
+                              {value} product{Number(value) === 1 ? "" : "s"}
+                            </span>
+                          )}
+                        />
+                      }
+                    />
+                    <Pie
+                      data={stockRadialData}
+                      dataKey="count"
+                      nameKey="category"
+                      innerRadius={45}
+                      outerRadius={65}
+                      strokeWidth={2}
+                      stroke="var(--background)"
+                      paddingAngle={2}
+                    >
+                      {stockRadialData.map((entry) => (
+                        <Cell key={entry.stockKey} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <ChartLegend content={<ChartLegendContent nameKey="stockKey" />} />
+                  </PieChart>
+                </ChartContainer>
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-3xl font-bold font-mono tabular-nums leading-none">{stockHealthPct}%</p>
+                    <p className="text-[11px] text-muted-foreground mt-1 uppercase tracking-wide">Healthy</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex min-h-[220px] items-center justify-center text-sm text-muted-foreground">
+                No product stock data
+              </div>
+            )}
           </CardContent>
           <CardFooter className="flex-col gap-2 text-sm mt-4">
             <div className="leading-none text-muted-foreground text-center">
-              {lowStockProds.length} products require restocking soon.
+              {prods.length} products · {lowStockProds.length} low · {outOfStockProds.length} out of stock
             </div>
           </CardFooter>
         </Card>

@@ -102,7 +102,10 @@ export interface SalesOrder {
   customerId: string
   status: SalesOrderStatus
   lines: SalesOrderLine[]
+  /** Sales person user id (usr-*); legacy rows may store a name until re-seeded */
   createdBy: string
+  salesPersonId?: string | null
+  salesPersonName?: string
   updatedBy?: string
   createdAt: string
   updatedAt: string

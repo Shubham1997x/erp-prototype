@@ -7,12 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "sonner"
-
-const DEMO_ACCOUNTS = [
-  { email: "arjun@shirtco.in",  role: "Admin",             name: "Arjun Mehta" },
-  { email: "rahul@shirtco.in",  role: "Sales Executive",   name: "Rahul Verma" },
-  { email: "vikram@shirtco.in", role: "Inventory Manager", name: "Vikram Nair" },
-]
+import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/demo-users"
+import { fetchCredentials, storeUser } from "@/lib/client-auth"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -25,12 +21,13 @@ export default function LoginPage() {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
+        credentials: fetchCredentials,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: loginEmail, password: loginPassword }),
       })
       const data = await res.json()
       if (!res.ok) { toast.error(data.error ?? "Login failed"); return }
-      localStorage.setItem("current_user", JSON.stringify(data.user))
+      storeUser(data.user)
       toast.success(`Welcome, ${data.user.name}!`)
       router.push("/dashboard")
     } catch {
@@ -47,8 +44,8 @@ export default function LoginPage() {
 
   async function quickLogin(acc: typeof DEMO_ACCOUNTS[0]) {
     setEmail(acc.email)
-    setPassword("Password@123")
-    await doLogin(acc.email, "Password@123")
+    setPassword(DEMO_PASSWORD)
+    await doLogin(acc.email, DEMO_PASSWORD)
   }
 
   return (

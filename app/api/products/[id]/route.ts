@@ -1,32 +1,95 @@
 import { getDb } from "@/lib/db"
 import { NextResponse } from "next/server"
+import { requireNotViewer } from "@/lib/auth"
+import { writeAuditLog } from "@/lib/audit"
 
 export const dynamic = "force-dynamic"
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+function mapProduct(r: Record<string, unknown>) {
+  return {
+    id: r.id,
+    name: r.name,
+    sku: r.sku,
+    unitOfMeasure: r.unit_of_measure,
+    price: r.price,
+    bomId: r.bom_id,
+    currentStock: r.current_stock,
+    reservedStock: r.reserved_stock ?? 0,
+    unitCost: r.unit_cost,
+    standardCost: r.standard_cost,
+    category: r.category,
+    isActive: r.is_active === 1,
+    imageUrl: r.image_url,
+  }
+}
+
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const db = getDb()
 
-    const product = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as any
+    const product = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as
+      | Record<string, unknown>
+      | undefined
     if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 })
 
-    return NextResponse.json({
-      id: product.id,
-      name: product.name,
-      sku: product.sku,
-      unitOfMeasure: product.unit_of_measure,
-      price: product.price,
-      bomId: product.bom_id,
-      currentStock: product.current_stock,
-      reservedStock: product.reserved_stock,
-      unitCost: product.unit_cost,
-      standardCost: product.standard_cost,
-      category: product.category,
-      isActive: product.is_active === 1,
-      imageUrl: product.image_url,
-    })
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(mapProduct(product))
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Error" }, { status: 500 })
   }
+}
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  let auth: Awaited<ReturnType<typeof requireNotViewer>>
+  try {
+    auth = await requireNotViewer(req)
+  } catch (e: unknown) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 403 })
+  }
+
+  if (!auth.isAdmin && !auth.isInventory) {
+    return NextResponse.json({ error: "Only inventory or admin can edit products" }, { status: 403 })
+  }
+
+  const { id } = await params
+  const db = getDb()
+
+  const before = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as Record<string, unknown> | undefined
+  if (!before) return NextResponse.json({ error: "Product not found" }, { status: 404 })
+
+  const body = await req.json()
+  const now = new Date().toISOString()
+
+  if (body.name !== undefined && !String(body.name).trim()) {
+    return NextResponse.json({ error: "Product name is required" }, { status: 400 })
+  }
+  if (body.price !== undefined && Number(body.price) <= 0) {
+    return NextResponse.json({ error: "Price must be greater than 0" }, { status: 400 })
+  }
+
+  const name = body.name !== undefined ? String(body.name).trim() : before.name
+  const sku = body.sku !== undefined ? String(body.sku).trim() || before.sku : before.sku
+  const unitOfMeasure =
+    body.unitOfMeasure !== undefined ? String(body.unitOfMeasure) : before.unit_of_measure
+  const price = body.price !== undefined ? Number(body.price) : before.price
+  const imageUrl = body.imageUrl !== undefined ? body.imageUrl : before.image_url
+
+  db.prepare(`
+    UPDATE products
+    SET name = ?, sku = ?, unit_of_measure = ?, price = ?, image_url = ?
+    WHERE id = ?
+  `).run(name, sku, unitOfMeasure, price, imageUrl, id)
+
+  const after = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as Record<string, unknown>
+
+  writeAuditLog(db, {
+    userId: auth.id,
+    action: "PRODUCT_UPDATED",
+    entityType: "product",
+    entityId: id,
+    before: mapProduct(before),
+    after: mapProduct(after),
+  })
+
+  return NextResponse.json(mapProduct(after))
 }

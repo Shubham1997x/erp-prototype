@@ -33,39 +33,69 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/sales-orders/[
         throw new Error(`Invalid transition: ${current} → ${status}. Allowed: ${allowed.join(", ") || "none"}`)
       }
 
-      // ── APPROVED: reserve finished goods ──────────────────────────────────
+      let effectiveStatus = status as SalesOrderStatus
+      let stockShortages: { productId: string; name: string; required: number; available: number }[] | undefined
+
+      // ── APPROVED: check stock, reserve, or flag NEEDS_RESTOCK ─────────────
       if (status === "APPROVED") {
         const lines = db.prepare("SELECT * FROM sales_order_lines WHERE order_id=?").all(id) as
           { product_id: string; qty: number }[]
 
+        stockShortages = []
         for (const line of lines) {
-          const existingRes = db.prepare(
-            "SELECT id FROM inventory_reservations WHERE reference_id=? AND entity_id=? AND is_active=1"
-          ).get(id, line.product_id)
-          if (existingRes) continue
-
-          const resId = newId("res")
-          db.prepare(`
-            INSERT INTO inventory_reservations
-              (id, entity_type, entity_id, reserved_qty, reservation_type, reference_id, reference_type, created_by)
-            VALUES (?, 'product', ?, ?, 'sales_order', ?, 'sales_order', ?)
-          `).run(resId, line.product_id, line.qty, id, auth.id)
-
-          db.prepare("UPDATE products SET reserved_stock = reserved_stock + ? WHERE id=?")
-            .run(line.qty, line.product_id)
+          const product = db.prepare("SELECT id, name, current_stock FROM products WHERE id=?").get(line.product_id) as
+            { id: string; name: string; current_stock: number } | undefined
+          if (!product) throw new Error(`Product not found: ${line.product_id}`)
+          if (product.current_stock < line.qty) {
+            stockShortages.push({
+              productId: product.id,
+              name: product.name,
+              required: line.qty,
+              available: product.current_stock,
+            })
+          }
         }
 
-        createNotification(db, {
-          role: "Production Manager",
-          type: "SO_APPROVED",
-          title: `Sales Order ${id} approved`,
-          message: `SO ${id} is ready for production planning.`,
-          entityType: "sales_order",
-          entityId: id,
-        })
+        if (stockShortages.length > 0) {
+          effectiveStatus = "NEEDS_RESTOCK"
+          createNotification(db, {
+            role: "Inventory Manager",
+            type: "SO_NEEDS_RESTOCK",
+            title: `${id} needs restock`,
+            message: `Sales order ${id} is short on ${stockShortages.length} product(s).`,
+            entityType: "sales_order",
+            entityId: id,
+          })
+        } else {
+          for (const line of lines) {
+            const existingRes = db.prepare(
+              "SELECT id FROM inventory_reservations WHERE reference_id=? AND entity_id=? AND is_active=1"
+            ).get(id, line.product_id)
+            if (existingRes) continue
+
+            const resId = newId("res")
+            db.prepare(`
+              INSERT INTO inventory_reservations
+                (id, entity_type, entity_id, reserved_qty, reservation_type, reference_id, reference_type, created_by)
+              VALUES (?, 'product', ?, ?, 'sales_order', ?, 'sales_order', ?)
+            `).run(resId, line.product_id, line.qty, id, auth.id)
+
+            db.prepare("UPDATE products SET reserved_stock = reserved_stock + ? WHERE id=?")
+              .run(line.qty, line.product_id)
+          }
+
+          createNotification(db, {
+            role: "Production Manager",
+            type: "SO_APPROVED",
+            title: `Sales Order ${id} approved`,
+            message: `SO ${id} is ready for production planning.`,
+            entityType: "sales_order",
+            entityId: id,
+          })
+        }
       }
 
-      // ── READY_TO_SHIP: validate stock is available (no deduction here) ────
+      // ── READY_TO_SHIP: validate stock, deduct it, and release reservations ────
       if (status === "READY_TO_SHIP") {
         const lines = db.prepare("SELECT * FROM sales_order_lines WHERE order_id=?").all(id) as
           { product_id: string; qty: number }[]
@@ -78,6 +108,31 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/sales-orders/[
             throw new Error(
               `Insufficient stock for "${product.name}". Required: ${line.qty}, Available: ${product.current_stock}`
             )
+          }
+
+          // Deduct stock
+          db.prepare("UPDATE products SET current_stock = current_stock - ? WHERE id=?")
+            .run(line.qty, line.product_id)
+
+          db.prepare(`
+            INSERT INTO stock_movements (entity_type, entity_id, delta, reason, reference_type, reference_id, created_by, created_at)
+            VALUES ('product', ?, ?, 'Order fulfilled', 'sales_order', ?, ?, ?)
+          `).run(line.product_id, -line.qty, id, auth.id, now)
+
+          // Release reservations
+          const activeRes = db.prepare(`
+            SELECT SUM(reserved_qty) as total FROM inventory_reservations
+            WHERE reference_id=? AND entity_id=? AND is_active=1
+          `).get(id, line.product_id) as { total: number | null }
+
+          const toRelease = activeRes.total ?? 0
+          if (toRelease > 0) {
+            db.prepare("UPDATE products SET reserved_stock = MAX(0, reserved_stock - ?) WHERE id=?")
+              .run(toRelease, line.product_id)
+            db.prepare(`
+              UPDATE inventory_reservations SET is_active=0, released_at=?
+              WHERE reference_id=? AND entity_id=? AND is_active=1
+            `).run(now, id, line.product_id)
           }
         }
         createNotification(db, {
@@ -135,18 +190,25 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/sales-orders/[
       }
 
       db.prepare("UPDATE sales_orders SET status=?, updated_at=?, updated_by=? WHERE id=?")
-        .run(status, now, auth.id, id)
+        .run(effectiveStatus, now, auth.id, id)
 
       writeAuditLog(db, {
         userId: auth.id,
-        action: `SO_STATUS_${status}`,
+        action: `SO_STATUS_${effectiveStatus}`,
         entityType: "sales_order",
         entityId: id,
         before: { status: current },
-        after:  { status },
+        after: stockShortages?.length
+          ? { status: effectiveStatus, shortages: stockShortages }
+          : { status: effectiveStatus },
       })
 
-      return { id, status, updatedAt: now }
+      return {
+        id,
+        status: effectiveStatus,
+        updatedAt: now,
+        ...(stockShortages?.length ? { shortages: stockShortages } : {}),
+      }
     })()
 
     return NextResponse.json(result)

@@ -1,11 +1,17 @@
 "use client"
 
-import { useFetch } from "@/hooks/use-api"
+import { useState } from "react"
+import { useFetch, apiPost, apiPatch } from "@/hooks/use-api"
+import { useUser } from "@/hooks/use-user"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Package, ArrowLeft, Warning, CheckCircle } from "@phosphor-icons/react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Package, ArrowLeft, Warning, CheckCircle, Spinner, ArrowUp, PencilSimple } from "@phosphor-icons/react"
 import type { Product } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { notifyNotificationsChanged } from "@/components/providers/notification-provider"
+import { restockToastMessage, type StockAdjustResponse } from "@/lib/stock-restock"
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v)
@@ -14,7 +20,107 @@ function formatINR(v: number) {
 export default function ProductDetailPage() {
   const { id } = useParams() as { id: string }
   const router = useRouter()
-  const { data: product, loading, error } = useFetch<Product>(`/api/products/${id}`)
+  const { user: currentUser } = useUser()
+  const { data: product, loading, error, refetch } = useFetch<Product>(`/api/products/${id}`)
+
+  const canManage =
+    !currentUser || currentUser.role === "Admin" || currentUser.role === "Inventory Manager"
+
+  const [editOpen, setEditOpen] = useState(false)
+  const [editForm, setEditForm] = useState({
+    name: "",
+    sku: "",
+    price: 0,
+    unitOfMeasure: "pcs",
+    imageUrl: "",
+  })
+  const [stockOpen, setStockOpen] = useState(false)
+  const [stockQty, setStockQty] = useState(0)
+  const [stockInvoiceDetails, setStockInvoiceDetails] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
+
+  function openEdit() {
+    if (!product) return
+    setEditForm({
+      name: product.name,
+      sku: product.sku ?? "",
+      price: product.price,
+      unitOfMeasure: product.unitOfMeasure ?? "pcs",
+      imageUrl: product.imageUrl ?? "",
+    })
+    setEditOpen(true)
+  }
+
+  async function handleEditImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingImage(true)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch("/api/upload", { method: "POST", body: formData })
+      if (!res.ok) throw new Error("Upload failed")
+      const data = await res.json()
+      setEditForm((prev) => ({ ...prev, imageUrl: data.url }))
+      toast.success("Image updated")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Upload failed")
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  async function handleSaveEdit() {
+    if (!product) return
+    if (!editForm.name.trim()) {
+      toast.error("Product name is required")
+      return
+    }
+    if (editForm.price <= 0) {
+      toast.error("Price must be greater than 0")
+      return
+    }
+    setSaving(true)
+    try {
+      await apiPatch(`/api/products/${product.id}`, editForm)
+      toast.success("Product updated")
+      setEditOpen(false)
+      refetch()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update product")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleRestock() {
+    if (!product || stockQty <= 0) {
+      toast.error("Enter a quantity greater than 0")
+      return
+    }
+    setSaving(true)
+    try {
+      const result = await apiPost<StockAdjustResponse>("/api/stock", {
+        entityType: "product",
+        entityId: product.id,
+        delta: stockQty,
+        reason: stockInvoiceDetails.trim()
+          ? `Restock — ${stockInvoiceDetails.trim()}`
+          : "Manual restock",
+      })
+      toast.success(restockToastMessage(stockQty, product.name, result.autoFulfilledOrders))
+      if (result.autoFulfilledOrders?.length) notifyNotificationsChanged()
+      setStockOpen(false)
+      setStockQty(0)
+      setStockInvoiceDetails("")
+      refetch()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Restock failed")
+    } finally {
+      setSaving(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -49,27 +155,47 @@ export default function ProductDetailPage() {
     <div className="p-6 max-w-[1200px] mx-auto space-y-6">
       <title>{product.name} | ShirtCo ERP</title>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 flex-wrap">
         <Button variant="ghost" size="icon" onClick={() => router.push("/products")}>
           <ArrowLeft size={20} />
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">{product.name}</h1>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold text-foreground truncate">{product.name}</h1>
           <p className="text-sm text-muted-foreground font-mono">{product.sku}</p>
         </div>
-        <div className="ml-auto">
-          <span className={cn(
+        <span
+          className={cn(
             "badge-status px-3 py-1 text-sm font-semibold",
             isLow ? "bg-amber-500/15 text-amber-500" : "bg-emerald-500/15 text-emerald-500"
-          )}>
-            {isLow ? <Warning size={16} className="mr-1 inline-block" /> : <CheckCircle size={16} className="mr-1 inline-block" />}
-            {isLow ? "Low Stock" : "In Stock"}
-          </span>
-        </div>
+          )}
+        >
+          {isLow ? (
+            <Warning size={16} className="mr-1 inline-block" />
+          ) : (
+            <CheckCircle size={16} className="mr-1 inline-block" />
+          )}
+          {isLow ? "Low Stock" : "In Stock"}
+        </span>
+        {canManage && (
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Button variant="outline" className="gap-2" onClick={openEdit}>
+              <PencilSimple size={16} /> Edit
+            </Button>
+            <Button
+              className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={() => {
+                setStockQty(0)
+                setStockInvoiceDetails("")
+                setStockOpen(true)
+              }}
+            >
+              <ArrowUp size={16} weight="bold" /> Restock
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Left Column: Image */}
         <div className="md:col-span-1">
           <div className="aspect-square rounded-2xl border bg-card shadow-sm overflow-hidden flex items-center justify-center p-2 relative">
             {product.imageUrl ? (
@@ -80,7 +206,6 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* Right Column: Details */}
         <div className="md:col-span-2 space-y-6">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="stat-card">
@@ -124,6 +249,126 @@ export default function ProductDetailPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <PencilSimple size={18} className="text-primary" /> Edit Product
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Stock: <span className="font-bold text-foreground">{product.currentStock} {product.unitOfMeasure}</span>
+              {" · "}use Restock to change quantity
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Product Name *</label>
+              <input
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SKU</label>
+              <input
+                value={editForm.sku}
+                onChange={(e) => setEditForm({ ...editForm, sku: e.target.value })}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Price (₹) *</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editForm.price}
+                  onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) || 0 })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-bold"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unit</label>
+                <select
+                  value={editForm.unitOfMeasure}
+                  onChange={(e) => setEditForm({ ...editForm, unitOfMeasure: e.target.value })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="pcs">pcs</option>
+                  <option value="units">units</option>
+                  <option value="sets">sets</option>
+                  <option value="boxes">boxes</option>
+                </select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Image</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleEditImageUpload}
+                disabled={uploadingImage}
+                className="w-full text-xs"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={saving || !editForm.name.trim() || editForm.price <= 0}>
+              {saving && <Spinner size={14} className="animate-spin mr-1" />}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={stockOpen} onOpenChange={setStockOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <ArrowUp size={18} className="text-emerald-500" weight="bold" /> Restock
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm">
+              <span className="font-semibold">{product.name}</span>
+              <span className="text-muted-foreground"> · current {product.currentStock} {product.unitOfMeasure}</span>
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quantity to add *</label>
+              <input
+                type="number"
+                min={1}
+                value={stockQty || ""}
+                onChange={(e) => setStockQty(parseInt(e.target.value, 10) || 0)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-bold"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Invoice / source (optional)</label>
+              <input
+                value={stockInvoiceDetails}
+                onChange={(e) => setStockInvoiceDetails(e.target.value)}
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                placeholder="PO number, supplier invoice…"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStockOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleRestock}
+              disabled={saving || stockQty <= 0}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {saving && <Spinner size={14} className="animate-spin mr-1" />}
+              Add stock
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

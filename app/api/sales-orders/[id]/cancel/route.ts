@@ -5,7 +5,7 @@ import { writeAuditLog, createNotification } from "@/lib/audit"
 
 export const dynamic = "force-dynamic"
 
-const CANCELLABLE_FROM = ["DRAFT", "SUBMITTED", "INVENTORY_CHECK", "CREDIT_HOLD", "APPROVED", "IN_PRODUCTION"]
+const CANCELLABLE_FROM = ["DRAFT", "SUBMITTED", "INVENTORY_CHECK", "CREDIT_HOLD", "APPROVED", "IN_PRODUCTION", "NEEDS_RESTOCK", "READY_TO_SHIP"]
 
 export async function POST(req: Request, ctx: RouteContext<"/api/sales-orders/[id]/cancel">) {
   let auth: Awaited<ReturnType<typeof requireNotViewer>>
@@ -48,6 +48,17 @@ export async function POST(req: Request, ctx: RouteContext<"/api/sales-orders/[i
             UPDATE inventory_reservations SET is_active=0, released_at=?
             WHERE reference_id=? AND entity_id=? AND is_active=1
           `).run(now, id, line.product_id)
+        }
+
+        // If order was READY_TO_SHIP, stock was already deducted from current_stock, so we must refund it
+        if (order.status === "READY_TO_SHIP") {
+          db.prepare("UPDATE products SET current_stock = current_stock + ? WHERE id=?")
+            .run(line.qty, line.product_id)
+          
+          db.prepare(`
+            INSERT INTO stock_movements (entity_type, entity_id, delta, reason, reference_type, reference_id, created_by, created_at)
+            VALUES ('product', ?, ?, 'Order cancelled', 'sales_order', ?, ?, ?)
+          `).run(line.product_id, line.qty, id, auth.id, now)
         }
       }
 

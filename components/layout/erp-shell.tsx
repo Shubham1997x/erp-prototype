@@ -11,81 +11,107 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { MagnifyingGlass, Gear, Sun, Moon } from "@phosphor-icons/react"
+import { Sun, Moon } from "@phosphor-icons/react"
+import { NotificationBell } from "@/components/layout/notification-bell"
+import { AuthGuard } from "@/components/layout/auth-guard"
+import { UserProvider, useUser } from "@/components/providers/user-provider"
+import { NotificationProvider } from "@/components/providers/notification-provider"
 import { useTheme } from "next-themes"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 
-export function ERPShell({ children }: { children: React.ReactNode }) {
+function userInitials(name: string | undefined): string {
+  if (!name?.trim()) return "?"
+  return name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2)
+}
+
+function ERPHeader() {
   const { resolvedTheme, setTheme } = useTheme()
   const pathname = usePathname()
+  const { user, loading } = useUser()
 
-  // Simple breadcrumb logic based on pathname
   const pathSegments = pathname.split("/").filter(Boolean)
-  const currentPage = pathSegments.length > 0 
-    ? pathSegments[0].charAt(0).toUpperCase() + pathSegments[0].slice(1).replace("-", " ") 
-    : "Dashboard"
+  const currentPage =
+    pathSegments.length > 0
+      ? pathSegments[0].charAt(0).toUpperCase() + pathSegments[0].slice(1).replace(/-/g, " ")
+      : "Dashboard"
+
+  const initials = userInitials(user?.name)
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-14">
-          <div className="flex items-center gap-2 px-4 flex-1">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/dashboard">Overview</BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{currentPage}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-14">
+      <div className="flex flex-1 items-center gap-2 px-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-2 h-4" />
+        <Breadcrumb>
+          <BreadcrumbList>
+            <BreadcrumbItem className="hidden md:block">
+              <BreadcrumbLink href="/dashboard">Overview</BreadcrumbLink>
+            </BreadcrumbItem>
+            <BreadcrumbSeparator className="hidden md:block" />
+            <BreadcrumbItem>
+              <BreadcrumbPage>{currentPage}</BreadcrumbPage>
+            </BreadcrumbItem>
+          </BreadcrumbList>
+        </Breadcrumb>
+      </div>
 
-          <div className="flex items-center gap-4 px-4">
-            <div className="relative hidden sm:block">
-              <MagnifyingGlass className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search"
-                className="w-64 bg-muted/50 pl-8 pr-12 rounded-lg"
-              />
-              <div className="absolute right-2 top-2 flex items-center gap-1">
-                <kbd className="pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground opacity-100">
-                  <span className="text-xs">⌘</span>K
-                </kbd>
-              </div>
-            </div>
+      <div className="flex items-center gap-2 px-4">
+        <NotificationBell />
 
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="size-8"
-              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-            >
-              {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-            </Button>
-            
-            <Button variant="ghost" size="icon" className="size-8">
-              <Gear size={18} />
-            </Button>
-            
-            <Avatar className="h-8 w-8 cursor-pointer rounded-lg border">
-              <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold rounded-lg">SN</AvatarFallback>
-            </Avatar>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8"
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          aria-label="Toggle theme"
+        >
+          {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+        </Button>
+
+        <div
+          className="flex items-center gap-2 pl-1"
+          title={user ? `${user.name} · ${user.role}` : undefined}
+        >
+          <Avatar className="h-8 w-8 rounded-full border">
+            <AvatarFallback className="rounded-full bg-primary/10 text-xs font-bold text-primary">
+              {loading ? "…" : initials}
+            </AvatarFallback>
+          </Avatar>
+          <div className="hidden min-w-0 sm:block">
+            <p className="truncate text-xs font-semibold leading-tight">
+              {loading ? "Loading…" : (user?.name ?? "Guest")}
+            </p>
+            {!loading && user?.role && (
+              <p className="truncate text-[10px] text-muted-foreground leading-tight">{user.role}</p>
+            )}
           </div>
-        </header>
-        <main className="flex-1 overflow-auto bg-muted/20">
-          {children}
-        </main>
-      </SidebarInset>
-    </SidebarProvider>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+export function ERPShell({ children }: { children: React.ReactNode }) {
+  return (
+    <UserProvider>
+      <NotificationProvider>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <ERPHeader />
+            <main className="flex-1 overflow-auto bg-muted/20">
+              <AuthGuard>{children}</AuthGuard>
+            </main>
+          </SidebarInset>
+        </SidebarProvider>
+      </NotificationProvider>
+    </UserProvider>
   )
 }

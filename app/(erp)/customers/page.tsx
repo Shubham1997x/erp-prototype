@@ -143,7 +143,6 @@ export default function CustomersPage() {
       <title>Customers | ShirtCo ERP</title>
       <div className="page-header">
         <div>
-          <h1 className="section-title">Customers</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{allCustomers.length} registered customers</p>
         </div>
         <Button

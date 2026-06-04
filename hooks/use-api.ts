@@ -1,40 +1,55 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { fetchCredentials, getAuthHeaders } from "@/lib/client-auth"
 
-function getAuthHeaders(): Record<string, string> {
-  if (typeof window === "undefined") return {}
-  try {
-    const stored = localStorage.getItem("current_user")
-    if (stored) {
-      const user = JSON.parse(stored)
-      return { "X-User-Id": String(user.id), "X-User-Role": String(user.role) }
-    }
-  } catch {}
-  return { "X-User-Id": "usr-1", "X-User-Role": "Admin" } // fallback
+const inflightByUrl = new Map<string, Promise<unknown>>()
+
+async function fetchJson<T>(url: string): Promise<T> {
+  const existing = inflightByUrl.get(url)
+  if (existing) return existing as Promise<T>
+
+  const promise = (async () => {
+    const res = await fetch(url, {
+      cache: "no-store",
+      credentials: fetchCredentials,
+      headers: getAuthHeaders(),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.json() as Promise<T>
+  })().finally(() => {
+    inflightByUrl.delete(url)
+  })
+
+  inflightByUrl.set(url, promise)
+  return promise
 }
 
 export function useFetch<T>(url: string, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const mounted = useRef(true)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(url, { cache: "no-store", headers: getAuthHeaders() })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setData(await res.json())
+      const json = await fetchJson<T>(url)
+      if (mounted.current) setData(json)
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error")
+      if (mounted.current) setError(e instanceof Error ? e.message : "Unknown error")
     } finally {
-      setLoading(false)
+      if (mounted.current) setLoading(false)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, ...deps])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    mounted.current = true
+    load()
+    return () => { mounted.current = false }
+  }, [load])
 
   return { data, loading, error, refetch: load }
 }
@@ -42,6 +57,7 @@ export function useFetch<T>(url: string, deps: unknown[] = []) {
 export async function apiPost<T = unknown>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
+    credentials: fetchCredentials,
     headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify(body),
   })
@@ -55,6 +71,7 @@ export async function apiPost<T = unknown>(url: string, body: unknown): Promise<
 export async function apiPatch<T = unknown>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "PATCH",
+    credentials: fetchCredentials,
     headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify(body),
   })
@@ -66,6 +83,6 @@ export async function apiPatch<T = unknown>(url: string, body: unknown): Promise
 }
 
 export async function apiDelete(url: string): Promise<void> {
-  const res = await fetch(url, { method: "DELETE", headers: getAuthHeaders() })
+  const res = await fetch(url, { method: "DELETE", credentials: fetchCredentials, headers: getAuthHeaders() })
   if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`)
 }

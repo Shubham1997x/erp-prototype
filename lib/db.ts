@@ -13,6 +13,7 @@ export function getDb(): Database.Database {
   if (_db) return _db
   _db = new Database(DB_PATH)
   _db.pragma("journal_mode = WAL")
+  _db.pragma("busy_timeout = 5000")
   _db.pragma("foreign_keys = ON")
   initSchema(_db)
   runMigrations(_db)
@@ -667,6 +668,16 @@ function runMigrations(db: Database.Database) {
   if (!ran.has(7)) {
     addCol(db, "products", "image_url", "TEXT")
     db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (7)").run()
+  }
+
+  // v8: normalize sales_orders.created_by (name → user id)
+  if (!ran.has(8)) {
+    const upd = db.prepare("UPDATE sales_orders SET created_by = ? WHERE created_by = ?")
+    const users = db.prepare("SELECT id, name FROM users").all() as { id: string; name: string }[]
+    for (const u of users) {
+      upd.run(u.id, u.name)
+    }
+    db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (8)").run()
   }
 }
 

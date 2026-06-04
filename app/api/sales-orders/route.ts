@@ -3,37 +3,9 @@ import { NextResponse } from "next/server"
 import { requireNotViewer } from "@/lib/auth"
 import { writeAuditLog } from "@/lib/audit"
 import { newId } from "@/lib/core"
+import { enrichOrder } from "@/lib/sales-order-enrich"
 
 export const dynamic = "force-dynamic"
-
-function enrichOrder(db: ReturnType<typeof getDb>, r: Record<string, unknown>) {
-  const lines = db.prepare(`
-    SELECT sol.*, p.image_url 
-    FROM sales_order_lines sol 
-    LEFT JOIN products p ON p.id = sol.product_id 
-    WHERE sol.order_id=?
-  `).all(r.id) as Record<string, unknown>[]
-  
-  return {
-    id: r.id, customerId: r.customer_id, status: r.status, notes: r.notes,
-    createdBy: r.created_by, updatedBy: r.updated_by,
-    createdAt: r.created_at, updatedAt: r.updated_at,
-    requestedDeliveryDate: r.requested_delivery_date,
-    promisedDeliveryDate:  r.promised_delivery_date,
-    actualDeliveryDate:    r.actual_delivery_date,
-    parentOrderId: r.parent_order_id,
-    revisionNumber: r.revision_number ?? 1,
-    approvalStatus: r.approval_status ?? "PENDING",
-    creditCheckPassed: r.credit_check_passed === 1,
-    tracking_number: r.tracking_number,
-    carrier: r.carrier,
-    lines: lines.map(l => ({
-      id: l.id, productId: l.product_id, qty: l.qty,
-      unitPrice: l.unit_price, fulfilledQty: l.fulfilled_qty ?? 0,
-      imageUrl: l.image_url,
-    })),
-  }
-}
 
 export async function GET(req: Request) {
   const db  = getDb()
