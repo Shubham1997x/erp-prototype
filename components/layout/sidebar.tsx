@@ -4,25 +4,24 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  ChartBar, ShoppingCart, Package, Users, SignOut, Moon, Sun, List, Gear, Warning,
+  ChartBar, ShoppingCart, Package, Users, SignOut, List, Gear, Warning,
 } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: ChartBar },
-  { href: "/orders",    label: "Orders",    icon: ShoppingCart },
+  { href: "/orders", label: "Orders", icon: ShoppingCart },
   { href: "/customers", label: "Customers", icon: Users },
-  { href: "/products",  label: "Products",  icon: Package },
+  { href: "/products", label: "Products", icon: Package },
 ]
 
 const DEV_PROFILES = [
-  { id: "usr-1", name: "Arjun Mehta",  email: "arjun@shirtco.in",  role: "Admin" },
-  { id: "usr-2", name: "Rahul Verma",  email: "rahul@shirtco.in",  role: "Sales Executive" },
-  { id: "usr-5", name: "Vikram Nair",  email: "vikram@shirtco.in", role: "Inventory Manager" },
-  { id: "usr-6", name: "Sneha Patel",  email: "sneha@shirtco.in",  role: "Viewer" },
+  { id: "usr-1", name: "Arjun Mehta", email: "arjun@shirtco.in", role: "Admin" },
+  { id: "usr-2", name: "Rahul Verma", email: "rahul@shirtco.in", role: "Sales Executive" },
+  { id: "usr-5", name: "Vikram Nair", email: "vikram@shirtco.in", role: "Inventory Manager" },
+  { id: "usr-6", name: "Sneha Patel", email: "sneha@shirtco.in", role: "Viewer" },
 ]
 
 function NavItem({
@@ -65,7 +64,6 @@ function NavItem({
 }
 
 export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const { resolvedTheme, setTheme } = useTheme()
   const [restockBadge, setRestockBadge] = useState(0)
 
   const [currentUser, setCurrentUser] = useState({
@@ -119,7 +117,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
           onClick={onToggle}
           className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white p-1 shadow-md border border-sidebar-border/40 transition-transform hover:scale-105"
         >
-          <img src="/logo.svg" className="size-full object-contain" alt="ShirtCo Logo" />
+          <img src="/logo.jpg" className="size-full object-cover rounded-full p-2" alt="ShirtCo Logo" />
         </button>
         {!collapsed && (
           <div className="min-w-0 flex-1">
@@ -163,18 +161,6 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
       {/* Bottom actions */}
       <div className="p-2 space-y-0.5">
         <NavItem href="/settings" label="Settings" icon={Gear} collapsed={collapsed} />
-        <button
-          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-          className={cn(
-            "w-full flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors",
-            collapsed && "justify-center px-2"
-          )}
-        >
-          {resolvedTheme === "dark"
-            ? <Sun size={17} className="shrink-0" />
-            : <Moon size={17} className="shrink-0" />}
-          {!collapsed && <span>{resolvedTheme === "dark" ? "Light Mode" : "Dark Mode"}</span>}
-        </button>
       </div>
 
       {/* Dev Switcher Dropdown */}

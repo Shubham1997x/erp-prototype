@@ -64,7 +64,7 @@ async function fetchSessionOnce(): Promise<DevUser | null> {
 }
 
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<DevUser | null>(() => readStoredUser() as DevUser | null)
+  const [user, setUser] = useState<DevUser | null>(null)
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
@@ -75,6 +75,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+    setUser(readStoredUser() as DevUser | null)
     void refresh()
 
     function onAuthChanged() {

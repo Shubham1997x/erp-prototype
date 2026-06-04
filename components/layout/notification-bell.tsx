@@ -1,11 +1,11 @@
 "use client"
 
-import { useState } from "react"
 import Link from "next/link"
-import { Bell, Check } from "@phosphor-icons/react"
+import { Bell, Check, ArrowRight } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useNotifications } from "@/components/providers/notification-provider"
+import { useState } from "react"
 import {
   formatNotificationTime,
   notificationSummary,
@@ -19,13 +19,12 @@ export function NotificationBell() {
   async function openPanel() {
     const next = !open
     setOpen(next)
-    if (next) {
-      await refresh()
-    }
+    if (next) await refresh()
   }
 
   async function handleMarkAllRead() {
     await markAllRead()
+    // keep panel open so user sees the "all caught up" state
   }
 
   async function handleOpenItem(id: string, isRead: boolean) {
@@ -33,8 +32,8 @@ export function NotificationBell() {
     setOpen(false)
   }
 
+  // Only unread items appear in the quick panel
   const unreadItems = items.filter((n) => !n.isRead)
-  const readItems = items.filter((n) => n.isRead)
 
   return (
     <div className="relative">
@@ -58,11 +57,12 @@ export function NotificationBell() {
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
           <div className="absolute right-0 top-full z-50 mt-2 w-[min(100vw-2rem,22rem)] overflow-hidden rounded-xl border bg-popover shadow-lg">
+            {/* Header */}
             <div className="flex items-center justify-between gap-2 border-b px-3 py-2.5">
               <div>
                 <p className="text-sm font-semibold leading-none">Notifications</p>
                 {unread > 0 && (
-                  <p className="text-[11px] text-muted-foreground mt-1">{unread} unread</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{unread} unread</p>
                 )}
               </div>
               {unread > 0 && (
@@ -73,50 +73,42 @@ export function NotificationBell() {
                   onClick={() => void handleMarkAllRead()}
                 >
                   <Check size={14} />
-                  Clear
+                  Clear all
                 </Button>
               )}
             </div>
 
+            {/* Body — only unread */}
             <div className="max-h-[min(20rem,50vh)] overflow-y-auto">
-              {loading && items.length === 0 ? (
+              {loading && unreadItems.length === 0 ? (
                 <p className="px-3 py-8 text-center text-xs text-muted-foreground">Loading…</p>
-              ) : items.length === 0 ? (
-                <p className="px-3 py-8 text-center text-xs text-muted-foreground">
-                  You&apos;re all caught up
-                </p>
+              ) : unreadItems.length === 0 ? (
+                <div className="flex flex-col items-center gap-1.5 px-3 py-8">
+                  <Check size={20} className="text-emerald-500" weight="bold" />
+                  <p className="text-xs font-medium text-muted-foreground">You&apos;re all caught up</p>
+                </div>
               ) : (
-                <>
-                  {unreadItems.length > 0 && (
-                    <ul className="py-1">
-                      {unreadItems.map((n) => (
-                        <NotificationRow
-                          key={n.id}
-                          n={n}
-                          onSelect={() => void handleOpenItem(n.id, n.isRead)}
-                        />
-                      ))}
-                    </ul>
-                  )}
-                  {readItems.length > 0 && unreadItems.length > 0 && (
-                    <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                      Earlier
-                    </p>
-                  )}
-                  {readItems.length > 0 && (
-                    <ul className={cn("py-1", unreadItems.length === 0 && "")}>
-                      {readItems.map((n) => (
-                        <NotificationRow
-                          key={n.id}
-                          n={n}
-                          muted
-                          onSelect={() => void handleOpenItem(n.id, n.isRead)}
-                        />
-                      ))}
-                    </ul>
-                  )}
-                </>
+                <ul className="py-1">
+                  {unreadItems.map((n) => (
+                    <NotificationRow
+                      key={n.id}
+                      n={n}
+                      onSelect={() => void handleOpenItem(n.id, n.isRead)}
+                    />
+                  ))}
+                </ul>
               )}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t px-3 py-2">
+              <Link
+                href="/notifications"
+                onClick={() => setOpen(false)}
+                className="flex items-center justify-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                View all notifications <ArrowRight size={12} />
+              </Link>
             </div>
           </div>
         </>
@@ -127,7 +119,6 @@ export function NotificationBell() {
 
 function NotificationRow({
   n,
-  muted,
   onSelect,
 }: {
   n: {
@@ -140,7 +131,6 @@ function NotificationRow({
     isRead: boolean
     createdAt: string
   }
-  muted?: boolean
   onSelect: () => void
 }) {
   const meta = notificationTypeMeta(n.type)
@@ -149,17 +139,12 @@ function NotificationRow({
     n.entityType === "sales_order" && n.entityId ? `/orders/${n.entityId}` : undefined
 
   const rowClass = cn(
-    "flex gap-2.5 px-3 py-2.5 transition-colors hover:bg-muted/60",
-    !n.isRead && !muted && "bg-primary/[0.04]",
-    muted && "opacity-70"
+    "flex gap-2.5 px-3 py-2.5 transition-colors hover:bg-muted/60 bg-primary/[0.04]"
   )
 
   const content = (
     <>
-      <span
-        className={cn("mt-1.5 size-2 shrink-0 rounded-full", meta.accent)}
-        aria-hidden
-      />
+      <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", meta.accent)} aria-hidden />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <span className="text-[11px] font-medium text-muted-foreground">{meta.label}</span>

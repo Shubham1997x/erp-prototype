@@ -12,12 +12,10 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Sun, Moon } from "@phosphor-icons/react"
 import { NotificationBell } from "@/components/layout/notification-bell"
 import { AuthGuard } from "@/components/layout/auth-guard"
 import { UserProvider, useUser } from "@/components/providers/user-provider"
 import { NotificationProvider } from "@/components/providers/notification-provider"
-import { useTheme } from "next-themes"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 
@@ -32,7 +30,6 @@ function userInitials(name: string | undefined): string {
 }
 
 function ERPHeader() {
-  const { resolvedTheme, setTheme } = useTheme()
   const pathname = usePathname()
   const { user, loading } = useUser()
 
@@ -64,16 +61,6 @@ function ERPHeader() {
 
       <div className="flex items-center gap-2 px-4">
         <NotificationBell />
-
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-          aria-label="Toggle theme"
-        >
-          {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-        </Button>
 
         <div
           className="flex items-center gap-2 pl-1"

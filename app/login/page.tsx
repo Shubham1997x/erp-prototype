@@ -12,9 +12,9 @@ import { fetchCredentials, storeUser } from "@/lib/client-auth"
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail]       = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [loading, setLoading]   = useState(false)
+  const [loading, setLoading] = useState(false)
 
   async function doLogin(loginEmail: string, loginPassword: string) {
     setLoading(true)
@@ -54,8 +54,8 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="text-center space-y-1">
           <div className="flex justify-center">
-            <div className="size-12 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-              <img src="/logo.svg" className="size-8" alt="ShirtCo" />
+            <div className="size-12 rounded-full bg-black flex items-center justify-center shadow-lg shadow-primary/30">
+              <img src="/logo.jpg" className="size-8 rounded-full" alt="ShirtCo" />
             </div>
           </div>
           <h1 className="text-2xl font-heading font-bold">ShirtCo ERP</h1>

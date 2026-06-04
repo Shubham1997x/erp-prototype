@@ -1,6 +1,5 @@
 import { Geist_Mono, Inter, Manrope, Roboto, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
 
@@ -23,12 +22,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       className={cn("antialiased", manrope.variable, roboto.variable, "font-mono", jetbrainsMono.variable)}
     >
       <body>
-        <ThemeProvider defaultTheme="dark">
-          <TooltipProvider>
-            {children}
-            <Toaster richColors position="bottom-right" expand={false} />
-          </TooltipProvider>
-        </ThemeProvider>
+        <TooltipProvider>
+          {children}
+          <Toaster richColors position="bottom-right" expand={false} />
+        </TooltipProvider>
       </body>
     </html>
   )

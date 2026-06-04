@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import Link from "next/link"
 import {
-  ChartBar, ShoppingCart, Users, Package, Gear, SignOut, CaretUpDown, Warning,
+  ChartBar, ShoppingCart, Users, Package, Gear, SignOut, CaretUpDown, Warning, Bell,
 } from "@phosphor-icons/react"
 import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel,
@@ -18,6 +18,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { toast } from "sonner"
 import { useUser } from "@/hooks/use-user"
+import { useNotifications } from "@/components/providers/notification-provider"
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/demo-users"
 import { clearStoredUser, fetchCredentials, getAuthHeaders, storeUser } from "@/lib/client-auth"
 import { cn } from "@/lib/utils"
@@ -25,9 +26,10 @@ import { cn } from "@/lib/utils"
 // Simplified nav — only the 4 core sections
 const NAV_ITEMS = [
   { name: "Dashboard", url: "/dashboard", icon: ChartBar, roles: ["Admin", "Sales Executive", "Inventory Manager", "Viewer"] },
-  { name: "Orders",    url: "/orders",    icon: ShoppingCart, roles: ["Admin", "Sales Executive", "Inventory Manager"] },
+  { name: "Orders", url: "/orders", icon: ShoppingCart, roles: ["Admin", "Sales Executive", "Inventory Manager"] },
   { name: "Customers", url: "/customers", icon: Users, roles: ["Admin", "Sales Executive"] },
-  { name: "Products",  url: "/products",  icon: Package, roles: ["Admin", "Inventory Manager"] },
+  { name: "Products", url: "/products", icon: Package, roles: ["Admin", "Inventory Manager"] },
+  { name: "Notifications", url: "/notifications", icon: Bell, roles: ["Admin", "Sales Executive", "Inventory Manager", "Viewer"] },
 ]
 
 const SYSTEM_ITEMS = [
@@ -36,10 +38,11 @@ const SYSTEM_ITEMS = [
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
-  const router   = useRouter()
+  const router = useRouter()
   const { state } = useSidebar()
 
   const { user: currentUser, refresh: refreshUser } = useUser()
+  const { unread: notifUnread } = useNotifications()
   const [restockCount, setRestockCount] = useState(0)
   const [switching, setSwitching] = useState(false)
 
@@ -102,13 +105,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const badges: Record<string, number> = {
     "/orders": restockCount,
+    "/notifications": notifUnread,
   }
 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader className="flex flex-row items-center gap-3 border-b border-sidebar-border/50 px-3 pb-3 pt-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
-        <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded-lg border border-sidebar-border/40 bg-primary text-primary-foreground shadow shadow-primary/30 group-data-[collapsible=icon]:size-9">
-          <img src="/logo.svg" className="size-full object-contain p-1" alt="ShirtCo" />
+        <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded-full border border-sidebar-border/40 bg-black text-primary-foreground shadow shadow-primary/30 group-data-[collapsible=icon]:size-9">
+          <img src="/logo.jpg" className="size-full object-center p-2 rounded-full" alt="ShirtCo" />
         </div>
         <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
           <span className="truncate font-heading text-base font-bold">ShirtCo ERP</span>
