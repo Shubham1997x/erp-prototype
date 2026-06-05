@@ -70,9 +70,10 @@ export default function NotificationsPage() {
   const readItems = items.filter((n) => n.isRead)
 
   return (
-    <div className="mx-auto max-w-7xl  px-4 py-8">
+    <div className="p-4 sm:p-6 space-y-5 lg:px-10 w-full mx-auto max-w-7xl">
+      <title>Notifications | ShirtCo ERP</title>
       {/* Page header */}
-      <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="page-header">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
@@ -116,7 +117,7 @@ export default function NotificationsPage() {
         {unreadItems.length > 0 && (
           <section className="break-inside-avoid mb-6">
             <SectionHeading label="Unread" count={unreadItems.length} accent />
-            <div className="mt-2 divide-y rounded-xl border bg-card overflow-hidden">
+            <div className="mt-2 divide-y rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-sm overflow-hidden glass-card">
               {unreadItems.map((n) => (
                 <NotifRow key={n.id} n={n} onMarkRead={() => void markRead(n.id)} />
               ))}
@@ -131,7 +132,7 @@ export default function NotificationsPage() {
           .map((g) => (
             <section key={g.key} className="break-inside-avoid mb-6">
               <GroupLabel label={g.label} type={g.key} />
-              <div className="mt-1.5 divide-y rounded-xl border bg-card overflow-hidden">
+              <div className="mt-1.5 divide-y rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-sm overflow-hidden glass-card">
                 {g.items.map((n) => (
                   <NotifRow key={n.id} n={n} muted />
                 ))}

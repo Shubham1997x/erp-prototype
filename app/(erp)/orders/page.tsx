@@ -269,7 +269,6 @@ export default function OrdersPage() {
                   <TableHead className="font-semibold text-xs">Sales rep</TableHead>
                   <TableHead className="font-semibold text-xs">Date</TableHead>
                   <TableHead className="font-semibold text-xs">Items</TableHead>
-                  <TableHead className="font-semibold text-xs">SKUs</TableHead>
                   <TableHead className="font-semibold text-xs">Status</TableHead>
                   <TableHead className="font-semibold text-xs text-right">Total</TableHead>
                   <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
@@ -357,11 +356,6 @@ export default function OrdersPage() {
                           {uniqueImages.length === 0 && (
                             <span className="text-xs text-muted-foreground/50 italic px-2">No images</span>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-[11px] font-mono text-muted-foreground max-w-[120px] truncate" title={Array.from(new Set(order.lines.map(l => allProducts.find(p => p.id === l.productId)?.sku).filter(Boolean))).join(", ")}>
-                          {Array.from(new Set(order.lines.map(l => allProducts.find(p => p.id === l.productId)?.sku).filter(Boolean))).join(", ") || "—"}
                         </div>
                       </TableCell>
                       <TableCell>
