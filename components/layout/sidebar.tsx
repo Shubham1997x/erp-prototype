@@ -200,7 +200,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             onClick={() => setShowSwitcher(!showSwitcher)}
             className="p-3 flex items-center gap-2.5 cursor-pointer hover:bg-sidebar-accent rounded-lg m-1 transition-colors relative"
           >
-            <div className="size-7 rounded-full bg-gradient-to-br from-primary to-violet-600 flex items-center justify-center text-[11px] font-bold text-white shrink-0 shadow shadow-primary/30">
+            <div className="size-7 rounded-full bg-linear-to-br from-primary to-violet-600 flex items-center justify-center text-[11px] font-bold text-white shrink-0 shadow shadow-primary/30">
               {initials}
             </div>
             <div className="min-w-0 flex-1">

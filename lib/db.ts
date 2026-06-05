@@ -2,7 +2,7 @@ import Database from "better-sqlite3"
 import path from "path"
 import fs from "fs"
 
-const DB_DIR = process.env.RENDER ? "/data" : path.join(process.cwd(), "data")
+const DB_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH ?? path.join(process.cwd(), "data")
 const DB_PATH = path.join(DB_DIR, "erp.db")
 
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true })

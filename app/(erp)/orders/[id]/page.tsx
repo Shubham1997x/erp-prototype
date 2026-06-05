@@ -519,7 +519,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
           if (!hasShortages) {
             return (
               <div className="rounded-xl border border-teal-200 bg-teal-50/50 dark:border-teal-500/30 dark:bg-teal-500/5 shadow-sm overflow-hidden relative">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-teal-400 to-emerald-500" />
+                <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-teal-400 to-emerald-500" />
 
                 <div className="p-5">
                   <div className="flex items-start gap-3 mb-4">
@@ -572,7 +572,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
 
           return (
             <div className="glass-card overflow-hidden relative">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-orange-500" />
+              <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-amber-400 to-orange-500" />
 
               <div className="p-6">
                 <div className="flex items-start gap-4 mb-6">

@@ -356,7 +356,7 @@ function NotifRow({
     <div
       className={cn(
         "group flex cursor-default items-start gap-3 px-4 py-3 transition-colors",
-        !n.isRead && "bg-primary/[0.035] hover:bg-primary/[0.06]",
+        !n.isRead && "bg-primary/[0.035] hover:bg-primary/6",
         n.isRead && "hover:bg-muted/40",
         muted && "opacity-60 hover:opacity-100"
       )}
