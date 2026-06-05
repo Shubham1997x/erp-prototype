@@ -56,7 +56,7 @@ export function fulfillSalesOrder(
 
   const priorStatus = order.status as string
 
-  if (priorStatus !== "NEEDS_RESTOCK") {
+  if (priorStatus !== "NEEDS_RESTOCK" && priorStatus !== "INVENTORY_CHECK") {
     return {
       orderId,
       status: priorStatus === "READY_TO_SHIP" ? "READY_TO_SHIP" : "NEEDS_RESTOCK",
@@ -116,10 +116,10 @@ export function fulfillSalesOrder(
       entityType: "sales_order",
       entityId: orderId,
     }
-    createNotification(db, { ...notif, role: "Sales Executive" })
-    createNotification(db, { ...notif, role: "Admin" })
     if (createdBy?.startsWith("usr-")) {
       createNotification(db, { ...notif, userId: createdBy })
+    } else {
+      createNotification(db, { ...notif, role: "Sales Executive" })
     }
   }
 

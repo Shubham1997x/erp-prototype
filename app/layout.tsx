@@ -21,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       suppressHydrationWarning
       className={cn("antialiased", manrope.variable, roboto.variable, "font-mono", jetbrainsMono.variable)}
     >
-      <body>
+      <body suppressHydrationWarning>
         <TooltipProvider>
           {children}
           <Toaster richColors position="bottom-right" expand={false} />

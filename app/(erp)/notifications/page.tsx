@@ -70,7 +70,7 @@ export default function NotificationsPage() {
   const readItems = items.filter((n) => n.isRead)
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8">
+    <div className="mx-auto max-w-7xl  px-4 py-8">
       {/* Page header */}
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
@@ -111,39 +111,34 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      {/* Unread section */}
-      {unreadItems.length > 0 && (
-        <section className="mb-8">
-          <SectionHeading label="Unread" count={unreadItems.length} accent />
-          <div className="mt-2 divide-y rounded-xl border bg-card overflow-hidden">
-            {unreadItems.map((n) => (
-              <NotifRow key={n.id} n={n} onMarkRead={() => void markRead(n.id)} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Read — grouped by type */}
-      {readItems.length > 0 && (
-        <section>
-          <SectionHeading label="Earlier" count={readItems.length} />
-          <div className="mt-2 space-y-6">
-            {groups
-              .map((g) => ({ ...g, items: g.items.filter((n) => n.isRead) }))
-              .filter((g) => g.items.length > 0)
-              .map((g) => (
-                <div key={g.key}>
-                  <GroupLabel label={g.label} type={g.key} />
-                  <div className="mt-1.5 divide-y rounded-xl border bg-card overflow-hidden">
-                    {g.items.map((n) => (
-                      <NotifRow key={n.id} n={n} muted />
-                    ))}
-                  </div>
-                </div>
+      <div className=" gap-6 w-full">
+        {/* Unread section */}
+        {unreadItems.length > 0 && (
+          <section className="break-inside-avoid mb-6">
+            <SectionHeading label="Unread" count={unreadItems.length} accent />
+            <div className="mt-2 divide-y rounded-xl border bg-card overflow-hidden">
+              {unreadItems.map((n) => (
+                <NotifRow key={n.id} n={n} onMarkRead={() => void markRead(n.id)} />
               ))}
-          </div>
-        </section>
-      )}
+            </div>
+          </section>
+        )}
+
+        {/* Read — grouped by type */}
+        {groups
+          .map((g) => ({ ...g, items: g.items.filter((n) => n.isRead) }))
+          .filter((g) => g.items.length > 0)
+          .map((g) => (
+            <section key={g.key} className="break-inside-avoid mb-6">
+              <GroupLabel label={g.label} type={g.key} />
+              <div className="mt-1.5 divide-y rounded-xl border bg-card overflow-hidden">
+                {g.items.map((n) => (
+                  <NotifRow key={n.id} n={n} muted />
+                ))}
+              </div>
+            </section>
+          ))}
+      </div>
     </div>
   )
 }

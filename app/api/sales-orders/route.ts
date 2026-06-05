@@ -14,13 +14,47 @@ export async function GET(req: Request) {
   const limit  = Math.min(200, parseInt(url.searchParams.get("limit") ?? "100"))
   const offset = (page - 1) * limit
   const status = url.searchParams.get("status")
+  const search = url.searchParams.get("q")
 
-  const where  = status ? "WHERE status=?" : ""
-  const params = status ? [status, limit, offset] : [limit, offset]
+  let conditions: string[] = []
+  let params: unknown[] = []
 
-  const total = (db.prepare(`SELECT COUNT(*) as n FROM sales_orders ${where}`).get(...(status ? [status] : [])) as { n: number }).n
-  const rows  = db.prepare(`SELECT * FROM sales_orders ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`)
-    .all(...params) as Record<string, unknown>[]
+  if (status) {
+    if (status.includes(",")) {
+      const statuses = status.split(",")
+      conditions.push(`so.status IN (${statuses.map(() => "?").join(",")})`)
+      params.push(...statuses)
+    } else {
+      conditions.push("so.status = ?")
+      params.push(status)
+    }
+  }
+
+  if (search) {
+    conditions.push("(so.id LIKE ? OR c.name LIKE ? OR so.notes LIKE ?)")
+    const like = `%${search}%`
+    params.push(like, like, like)
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
+
+  const countQuery = `
+    SELECT COUNT(*) as n 
+    FROM sales_orders so
+    LEFT JOIN customers c ON c.id = so.customer_id
+    ${where}
+  `
+  const total = (db.prepare(countQuery).get(...params) as { n: number }).n
+
+  const dataQuery = `
+    SELECT so.* 
+    FROM sales_orders so
+    LEFT JOIN customers c ON c.id = so.customer_id
+    ${where} 
+    ORDER BY so.created_at DESC 
+    LIMIT ? OFFSET ?
+  `
+  const rows = db.prepare(dataQuery).all(...params, limit, offset) as Record<string, unknown>[]
 
   return NextResponse.json({ data: rows.map(r => enrichOrder(db, r)), total, page, limit })
 }

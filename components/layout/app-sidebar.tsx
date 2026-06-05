@@ -169,8 +169,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   tooltip={currentUser?.name ?? "Account"}
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:h-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1!"
                 >
-                  <Avatar className="h-8 w-8 shrink-0 rounded-lg group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:w-9">
-                    <AvatarFallback className="rounded-lg bg-linear-to-br from-primary to-violet-600 text-white font-bold text-[11px] shadow shadow-primary/30">
+                  <Avatar className="h-8 w-8 shrink-0 rounded-full group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:w-9">
+                    <AvatarFallback className="rounded-full bg-linear-to-br from-primary to-violet-600 text-white font-bold text-[11px] shadow shadow-primary/30">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
@@ -188,9 +188,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 sideOffset={4}
               >
                 <DropdownMenuLabel className="p-0 font-normal">
-                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                    <Avatar className="h-8 w-8 rounded-lg">
-                      <AvatarFallback className="rounded-lg bg-linear-to-br from-primary to-violet-600 text-white font-bold text-xs">
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm rounded-full">
+                    <Avatar className="h-8 w-8 rounded-full">
+                      <AvatarFallback className="rounded-full bg-linear-to-br from-primary to-violet-600 text-white font-bold text-xs">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
@@ -248,6 +248,7 @@ function NavItem({
   pathname: string
   badge?: number
 }) {
+  const { setOpenMobile } = useSidebar()
   const active = pathname === item.url || pathname.startsWith(item.url + "/")
 
   return (
@@ -264,6 +265,7 @@ function NavItem({
       >
         <Link
           href={item.url}
+          onClick={() => setOpenMobile(false)}
           className="flex w-full min-w-0 items-center gap-2 group-data-[collapsible=icon]:w-full group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0"
         >
           <item.icon

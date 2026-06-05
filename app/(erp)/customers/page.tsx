@@ -139,7 +139,7 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="p-6 space-y-5 px-10  w-full mx-auto">
+    <div className="p-4 sm:p-6 space-y-5 lg:px-10 w-full mx-auto">
       <title>Customers | ShirtCo ERP</title>
       <div className="page-header">
         <div>
@@ -155,7 +155,7 @@ export default function CustomersPage() {
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="stat-card">
           <p className="text-xs text-muted-foreground font-medium">Total Customers</p>
           <p className="text-2xl font-heading font-bold">{allCustomers.length}</p>

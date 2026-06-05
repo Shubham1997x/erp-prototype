@@ -178,7 +178,7 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="p-6 space-y-5 px-10 w-full mx-auto">
+    <div className="p-4 sm:p-6 space-y-5 lg:px-10 w-full mx-auto">
       <title>Products | ShirtCo ERP</title>
 
       {/* Header */}
@@ -194,8 +194,8 @@ export default function ProductsPage() {
         )}
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Summary stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="stat-card">
           <p className="text-xs text-muted-foreground font-medium">Total Products</p>
           <p className="text-2xl font-heading font-bold">{products.length}</p>

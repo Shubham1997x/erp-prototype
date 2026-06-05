@@ -466,7 +466,7 @@ export default function SettingsPage() {
         : "Account settings"
 
   return (
-    <div className="p-6 space-y-6 px-10 w-full mx-auto">
+    <div className="p-4 sm:p-6 space-y-6 lg:px-10 w-full mx-auto">
       <title>Settings | ShirtCo ERP</title>
       <div>
         <h1 className="text-2xl font-heading font-bold flex items-center gap-2">

@@ -21,11 +21,11 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.897 0.196 126.665);
-  --chart-2: oklch(0.768 0.233 130.85);
-  --chart-3: oklch(0.648 0.2 131.684);
-  --chart-4: oklch(0.532 0.157 131.589);
-  --chart-5: oklch(0.453 0.124 130.933);
+  --chart-1: oklch(0.55 0.25 290); /* Violet (Primary) */
+  --chart-2: oklch(0.6 0.15 240); /* Blue */
+  --chart-3: oklch(0.65 0.18 150); /* Emerald */
+  --chart-4: oklch(0.7 0.2 60); /* Amber */
+  --chart-5: oklch(0.6 0.22 15); /* Rose */
 
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -105,7 +105,7 @@
   }
 
   .stat-card {
-    @apply rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-sm p-5 flex flex-col gap-2;
+    @apply rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-sm p-4 sm:p-5 flex flex-col gap-1 sm:gap-2;
   }
 
   .gradient-text {

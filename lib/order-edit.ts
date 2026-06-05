@@ -7,10 +7,8 @@ export const EDITABLE_ORDER_STATUSES: SalesOrderStatus[] = [
   "CREDIT_HOLD",
   "INVENTORY_CHECK",
   "APPROVED",
-  "IN_PRODUCTION",
   "NEEDS_RESTOCK",
   "READY_TO_SHIP",
-  "PARTIALLY_FULFILLED",
 ]
 
 export function canEditOrder(status: SalesOrderStatus): boolean {

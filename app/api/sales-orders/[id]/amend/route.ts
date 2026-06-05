@@ -4,16 +4,18 @@ import { requireNotViewer } from "@/lib/auth"
 import { writeAuditLog } from "@/lib/audit"
 import { newId } from "@/lib/core"
 import { canEditOrder } from "@/lib/order-edit"
+import { fulfillSalesOrder } from "@/lib/order-fulfill"
 
 export const dynamic = "force-dynamic"
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  let auth: Awaited<ReturnType<typeof requireNotViewer>>
   try {
-    auth = await requireNotViewer(req)
-  } catch (e: unknown) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 401 })
-  }
+    let auth: Awaited<ReturnType<typeof requireNotViewer>>
+    try {
+      auth = await requireNotViewer(req)
+    } catch (e: unknown) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 401 })
+    }
 
   const { id } = await params
   const db = getDb()
@@ -94,7 +96,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const beforeOrder = { ...order }
 
     if (lines) {
-      // Replace all lines for DRAFT orders
+      if (order.status === "READY_TO_SHIP") {
+        for (const bl of beforeLines) {
+          const product_id = bl.product_id as string
+          const qty = bl.qty as number
+          db.prepare("UPDATE products SET current_stock = current_stock + ? WHERE id=?").run(qty, product_id)
+          db.prepare(`
+            INSERT INTO stock_movements (entity_type, entity_id, delta, reason, reference_type, reference_id, created_by, created_at)
+            VALUES ('product', ?, ?, 'Order amendment return', 'sales_order', ?, ?, ?)
+          `).run(product_id, qty, id, auth.id, now)
+        }
+      }
+
+      // Replace all lines
       db.prepare("DELETE FROM sales_order_lines WHERE order_id = ?").run(id)
 
       for (const line of lines) {
@@ -108,6 +122,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Update order metadata
     const orderUpdates: string[] = ["revision_number = ?", "updated_at = ?", "updated_by = ?"]
     const orderValues: unknown[] = [newRevision, now, auth.id]
+
+    if (lines && order.status !== "DRAFT" && order.status !== "SUBMITTED") {
+      orderUpdates.push("status = ?")
+      orderValues.push("INVENTORY_CHECK")
+    }
 
     if (notes !== undefined) {
       orderUpdates.push("notes = ?")
@@ -138,7 +157,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       auth.id,
       changeSummary,
       JSON.stringify({ order: beforeOrder, lines: beforeLines }),
-      JSON.stringify({ order: afterOrder, lines: afterLines })
+      JSON.stringify({ order: afterOrder, lines: afterLines }),
+      now
     )
 
     writeAuditLog(db, {
@@ -150,11 +170,38 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       after: { revisionNumber: newRevision, lines: lines ?? beforeLines },
       details: changeSummary,
     })
+
+    // Notify Inventory if order was in NEEDS_RESTOCK
+    if (beforeOrder.status === "NEEDS_RESTOCK" && lines) {
+      db.prepare(`
+        INSERT INTO notifications (id, role, type, title, message, entity_type, entity_id, created_at)
+        VALUES (?, 'Inventory', 'ORDER_AMENDED', 'Restock Order Amended', ?, 'sales_order', ?, ?)
+      `).run(
+        newId("notif"),
+        `Sales Order ${id} was just amended by Sales. Please review any pending procurement as the quantities may have changed.`,
+        id,
+        now
+      )
+    }
   })()
+
+  // Attempt auto-fulfill if we pushed it to INVENTORY_CHECK
+  try {
+    const freshOrder = db.prepare("SELECT status FROM sales_orders WHERE id = ?").get(id) as { status: string }
+    if (freshOrder.status === "INVENTORY_CHECK") {
+      db.transaction(() => fulfillSalesOrder(db, { orderId: id, userId: auth.id, now }))()
+    }
+  } catch (err) {
+    console.error("Auto-fulfill after amend failed:", err)
+  }
 
   const updatedOrder = db.prepare("SELECT * FROM sales_orders WHERE id = ?").get(id)
   const updatedLines = db.prepare("SELECT * FROM sales_order_lines WHERE order_id = ?").all(id)
   const amendment = db.prepare("SELECT * FROM so_amendments WHERE id = ?").get(amendmentId)
 
-  return NextResponse.json({ order: updatedOrder, lines: updatedLines, amendment }, { status: 200 })
+    return NextResponse.json({ order: updatedOrder, lines: updatedLines, amendment }, { status: 200 })
+  } catch (error: any) {
+    console.error("AMEND ERROR:", error);
+    return NextResponse.json({ error: error.message || String(error) }, { status: 500 })
+  }
 }
