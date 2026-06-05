@@ -23,6 +23,7 @@ export async function POST(req: Request, ctx: RouteContext<"/api/sales-orders/[i
       const order = db.prepare("SELECT * FROM sales_orders WHERE id=?").get(id) as
         Record<string, unknown> | undefined
       if (!order) throw new Error("Sales order not found")
+      const orderNum = (order.order_number as string | undefined) ?? id
 
       if (!CANCELLABLE_FROM.includes(order.status as string)) {
         throw new Error(
@@ -110,8 +111,8 @@ export async function POST(req: Request, ctx: RouteContext<"/api/sales-orders/[i
       createNotification(db, {
         role: "Production Manager",
         type: "SO_CANCELLED",
-        title: `Sales Order ${id} cancelled`,
-        message: `SO ${id} was cancelled. ${linkedPOs.length} production order(s) also cancelled and reservations released.`,
+        title: `Order ${orderNum} cancelled`,
+        message: `Order ${orderNum} was cancelled. ${linkedPOs.length} production order(s) also cancelled and reservations released.`,
         entityType: "sales_order",
         entityId: id,
       })

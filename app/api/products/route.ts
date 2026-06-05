@@ -8,7 +8,7 @@ export async function GET() {
   const rows = db.prepare("SELECT * FROM products ORDER BY name ASC").all() as Record<string, unknown>[]
   return NextResponse.json(rows.map((r) => ({
     id: r.id, name: r.name, sku: r.sku, unitOfMeasure: r.unit_of_measure,
-    price: r.price, bomId: r.bom_id, currentStock: r.current_stock,
+    price: r.price, bomId: r.bom_id, currentStock: Math.max(0, r.current_stock as number),
     imageUrl: r.image_url,
   })))
 }

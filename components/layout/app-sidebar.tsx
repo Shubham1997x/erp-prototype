@@ -20,8 +20,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
 import { useUser } from "@/hooks/use-user"
 import { useNotifications } from "@/components/providers/notification-provider"
-import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/demo-users"
-import { clearStoredUser, fetchCredentials, getAuthHeaders, storeUser } from "@/lib/client-auth"
+import { clearStoredUser, fetchCredentials, getAuthHeaders } from "@/lib/client-auth"
 import { cn } from "@/lib/utils"
 
 // Simplified nav — only the 4 core sections
@@ -45,7 +44,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user: currentUser, refresh: refreshUser } = useUser()
   const { unread: notifUnread } = useNotifications()
   const [restockCount, setRestockCount] = useState(0)
-  const [switching, setSwitching] = useState(false)
 
   // Badge: restock count (skip on orders page — that page already loads orders)
   useEffect(() => {
@@ -64,32 +62,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const id = setInterval(loadBadge, 60_000)
     return () => clearInterval(id)
   }, [currentUser, pathname])
-
-  async function handleSwitchAccount(email: string) {
-    if (currentUser?.email === email) return
-    setSwitching(true)
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        credentials: fetchCredentials,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password: DEMO_PASSWORD }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error ?? "Could not switch account")
-        return
-      }
-      storeUser(data.user)
-      await refreshUser()
-      toast.success(`Switched to ${data.user.name}`)
-      router.refresh()
-    } catch {
-      toast.error("Failed to switch account")
-    } finally {
-      setSwitching(false)
-    }
-  }
 
   async function handleLogout() {
     try {
@@ -168,7 +140,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <SidebarMenuButton
                   size="lg"
                   tooltip={currentUser?.name ?? "Account"}
-                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:h-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1!"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:h-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1! focus-visible:outline-none focus-visible:ring-0"
                 >
                   <Avatar className="h-8 w-8 shrink-0 rounded-full group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:w-9">
                     {currentUser && (
@@ -207,23 +179,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </div>
                   </div>
                 </DropdownMenuLabel>
-                <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                  Switch account (one browser = one login)
-                </DropdownMenuLabel>
-                {DEMO_ACCOUNTS.map((acc) => (
-                  <DropdownMenuItem
-                    key={acc.email}
-                    disabled={switching || currentUser?.email === acc.email}
-                    onClick={() => handleSwitchAccount(acc.email)}
-                    className="cursor-pointer"
-                  >
-                    <div className="flex flex-col">
-                      <span className="font-medium">{acc.name}</span>
-                      <span className="text-xs text-muted-foreground">{acc.role}</span>
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href="/settings" className="cursor-pointer flex items-center gap-2">
                     <Gear size={16} /> Settings

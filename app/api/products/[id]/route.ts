@@ -13,7 +13,7 @@ function mapProduct(r: Record<string, unknown>) {
     unitOfMeasure: r.unit_of_measure,
     price: r.price,
     bomId: r.bom_id,
-    currentStock: r.current_stock,
+    currentStock: Math.max(0, r.current_stock as number),
     reservedStock: r.reserved_stock ?? 0,
     unitCost: r.unit_cost,
     standardCost: r.standard_cost,

@@ -6,22 +6,55 @@ import { useFetch, apiPost, apiPatch } from "@/hooks/use-api"
 import { useUser } from "@/hooks/use-user"
 import type { Product } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Package, Warning, CheckCircle, Spinner, ArrowUp, Eye, PencilSimple } from "@phosphor-icons/react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Plus,
+  Package,
+  Warning,
+  CheckCircle,
+  Spinner,
+  ArrowUp,
+  Eye,
+  PencilSimple,
+} from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { notifyNotificationsChanged } from "@/components/providers/notification-provider"
 import { Lock } from "@phosphor-icons/react"
-import { restockToastMessage, type StockAdjustResponse } from "@/lib/stock-restock"
+import {
+  restockToastMessage,
+  type StockAdjustResponse,
+} from "@/lib/stock-restock"
 
 function formatINR(v: number) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v)
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(v)
 }
 
 export default function ProductsPage() {
   const router = useRouter()
-  const { data: productsRes, loading, refetch } = useFetch<Product[] | { data: Product[] }>("/api/products")
+  const {
+    data: productsRes,
+    loading,
+    refetch,
+  } = useFetch<Product[] | { data: Product[] }>("/api/products")
 
   const { user: currentUser } = useUser()
 
@@ -30,7 +63,14 @@ export default function ProductsPage() {
 
   // Add product
   const [addOpen, setAddOpen] = useState(false)
-  const [addForm, setAddForm] = useState({ name: "", sku: "", price: 0, unitOfMeasure: "pcs", startingStock: 0, imageUrl: "" })
+  const [addForm, setAddForm] = useState({
+    name: "",
+    sku: "",
+    price: 0,
+    unitOfMeasure: "pcs",
+    startingStock: 0,
+    imageUrl: "",
+  })
   const [uploadingImage, setUploadingImage] = useState(false)
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -44,7 +84,7 @@ export default function ProductsPage() {
 
       const res = await fetch("/api/upload", {
         method: "POST",
-        body: formData
+        body: formData,
       })
 
       if (!res.ok) throw new Error("Upload failed")
@@ -74,33 +114,54 @@ export default function ProductsPage() {
   const [stockInvoiceDetails, setStockInvoiceDetails] = useState("")
 
   const [saving, setSaving] = useState(false)
-  const canManage = !currentUser || currentUser.role === "Admin" || currentUser.role === "Inventory Manager"
+  const canManage =
+    !currentUser ||
+    currentUser.role === "Admin" ||
+    currentUser.role === "Inventory Manager"
 
   function unwrap<T>(res: { data: T[] } | T[] | null | undefined): T[] {
     if (!res) return []
     if (Array.isArray(res)) return res
-    if (Array.isArray((res as { data: T[] }).data)) return (res as { data: T[] }).data
+    if (Array.isArray((res as { data: T[] }).data))
+      return (res as { data: T[] }).data
     return []
   }
 
   const products = unwrap(productsRes)
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(search.toLowerCase()) || 
-    (p.sku && p.sku.toLowerCase().includes(search.toLowerCase()))
+  const filteredProducts = products.filter(
+    (p) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      (p.sku && p.sku.toLowerCase().includes(search.toLowerCase()))
   )
-  const totalValue = filteredProducts.reduce((s, p) => s + p.currentStock * p.price, 0)
+  const totalValue = filteredProducts.reduce(
+    (s, p) => s + p.currentStock * p.price,
+    0
+  )
   const lowStock = filteredProducts.filter((p) => p.currentStock < 10)
   const inStock = filteredProducts.filter((p) => p.currentStock >= 10)
 
   async function handleAddProduct() {
-    if (!addForm.name.trim()) { toast.error("Product name is required"); return }
-    if (addForm.price <= 0) { toast.error("Price must be greater than 0"); return }
+    if (!addForm.name.trim()) {
+      toast.error("Product name is required")
+      return
+    }
+    if (addForm.price <= 0) {
+      toast.error("Price must be greater than 0")
+      return
+    }
     setSaving(true)
     try {
       await apiPost("/api/products", addForm)
       toast.success("Product added successfully")
       setAddOpen(false)
-      setAddForm({ name: "", sku: "", price: 0, unitOfMeasure: "pcs", startingStock: 0, imageUrl: "" })
+      setAddForm({
+        name: "",
+        sku: "",
+        price: 0,
+        unitOfMeasure: "pcs",
+        startingStock: 0,
+        imageUrl: "",
+      })
       refetch()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to add product")
@@ -163,7 +224,10 @@ export default function ProductsPage() {
   }
 
   async function handleAddStock() {
-    if (!stockDialog || stockQty <= 0) { toast.error("Enter a quantity greater than 0"); return }
+    if (!stockDialog || stockQty <= 0) {
+      toast.error("Enter a quantity greater than 0")
+      return
+    }
     setSaving(true)
     try {
       const result = await apiPost<StockAdjustResponse>("/api/stock", {
@@ -172,7 +236,13 @@ export default function ProductsPage() {
         delta: stockQty,
         reason: `Manual restock${stockInvoiceDetails ? ` - Invoice: ${stockInvoiceDetails}` : ""}`,
       })
-      toast.success(restockToastMessage(stockQty, stockDialog.name, result.autoFulfilledOrders))
+      toast.success(
+        restockToastMessage(
+          stockQty,
+          stockDialog.name,
+          result.autoFulfilledOrders
+        )
+      )
       if (result.autoFulfilledOrders?.length) notifyNotificationsChanged()
       setStockDialog(null)
       setStockQty(0)
@@ -186,46 +256,76 @@ export default function ProductsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 lg:px-10 w-full mx-auto">
+    <div className="mx-auto w-full space-y-5 p-4 sm:p-6 lg:px-10">
       <title>Products | ShirtCo ERP</title>
 
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="section-title">Products</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{products.length} products in catalog</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            {products.length} products in catalog
+          </p>
         </div>
-        <Button 
-          onClick={() => setAddOpen(true)} 
+        <Button
+          onClick={() => setAddOpen(true)}
           disabled={!canManage}
-          className="gap-2 shadow-sm shadow-primary/20 w-full sm:w-auto"
+          className="w-full gap-2 shadow-sm shadow-primary/20 sm:w-auto"
         >
-          {!canManage ? <Lock size={15} weight="bold" /> : <Plus size={15} weight="bold" />} Add Product
+          {!canManage ? (
+            <Lock size={15} weight="bold" />
+          ) : (
+            <Plus size={15} weight="bold" />
+          )}{" "}
+          Add Product
         </Button>
       </div>
 
       {/* Summary stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="stat-card">
-          <p className="text-xs text-muted-foreground font-medium">Total Products</p>
-          <p className="text-2xl font-heading font-bold">{products.length}</p>
+          <p className="text-xs font-medium text-muted-foreground">
+            Total Products
+          </p>
+          <p className="font-heading text-2xl font-bold">{products.length}</p>
           <p className="text-[11px] text-muted-foreground">In catalog</p>
         </div>
-        <div className={cn("stat-card", lowStock.length > 0 && "border-amber-500/30 bg-amber-500/5")}>
-          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
-            {lowStock.length > 0
-              ? <Warning size={11} className="text-amber-500" weight="fill" />
-              : <CheckCircle size={11} className="text-emerald-500" weight="fill" />}
+        <div
+          className={cn(
+            "stat-card",
+            lowStock.length > 0 && "border-amber-500/30 bg-amber-500/5"
+          )}
+        >
+          <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            {lowStock.length > 0 ? (
+              <Warning size={11} className="text-amber-500" weight="fill" />
+            ) : (
+              <CheckCircle
+                size={11}
+                className="text-emerald-500"
+                weight="fill"
+              />
+            )}
             Low Stock
           </p>
-          <p className={cn("text-2xl font-heading font-bold", lowStock.length > 0 ? "text-amber-500" : "text-emerald-500")}>
+          <p
+            className={cn(
+              "font-heading text-2xl font-bold",
+              lowStock.length > 0 ? "text-amber-500" : "text-emerald-500"
+            )}
+          >
             {lowStock.length}
           </p>
-          <p className="text-[11px] text-muted-foreground">Products below 10 units</p>
+          <p className="text-[11px] text-muted-foreground">
+            Products below 10 units
+          </p>
         </div>
         <div className="stat-card">
-          <p className="text-xs text-muted-foreground font-medium">Stock Value</p>
-          <p className="text-2xl font-heading font-bold">{formatINR(totalValue)}</p>
+          <p className="text-xs font-medium text-muted-foreground">
+            Stock Value
+          </p>
+          <p className="font-heading text-2xl font-bold">
+            {formatINR(totalValue)}
+          </p>
           <p className="text-[11px] text-muted-foreground">At selling price</p>
         </div>
       </div>
@@ -235,7 +335,7 @@ export default function ProductsPage() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search by name or SKU..."
-        className="w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+        className="w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm shadow-sm transition-colors focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
       />
 
       {/* Products table */}
@@ -243,116 +343,162 @@ export default function ProductsPage() {
         <Table>
           <TableHeader>
             <TableRow className="table-header-row">
-              <TableHead className="font-semibold text-xs w-16">Image</TableHead>
-              <TableHead className="font-semibold text-xs">Product</TableHead>
-              <TableHead className="font-semibold text-xs">SKU</TableHead>
-              <TableHead className="font-semibold text-xs">Price</TableHead>
-              <TableHead className="font-semibold text-xs">In Stock</TableHead>
-              <TableHead className="font-semibold text-xs">Stock Value</TableHead>
-              <TableHead className="font-semibold text-xs">Status</TableHead>
-                    <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
+              <TableHead className="w-16 text-xs font-semibold">
+                Image
+              </TableHead>
+              <TableHead className="text-xs font-semibold">Product</TableHead>
+              <TableHead className="text-xs font-semibold">SKU</TableHead>
+              <TableHead className="text-xs font-semibold">Price</TableHead>
+              <TableHead className="text-xs font-semibold">In Stock</TableHead>
+              <TableHead className="text-xs font-semibold">
+                Stock Value
+              </TableHead>
+              <TableHead className="text-xs font-semibold">Status</TableHead>
+              <TableHead className="text-right text-xs font-semibold">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {loading && [...Array(5)].map((_, i) => (
-              <TableRow key={i}>
-                {[...Array(8)].map((_, j) => (
-                  <TableCell key={j}><div className="shimmer h-4 rounded" /></TableCell>
-                ))}
-              </TableRow>
-            ))}
+            {loading &&
+              [...Array(5)].map((_, i) => (
+                <TableRow key={i}>
+                  {[...Array(8)].map((_, j) => (
+                    <TableCell key={j}>
+                      <div className="shimmer h-4 rounded" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
             {!loading && filteredProducts.length === 0 && (
               <TableRow>
-                <TableCell colSpan={8} className="py-20 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={8}
+                  className="py-20 text-center text-muted-foreground"
+                >
                   <Package size={36} className="mx-auto mb-3 opacity-20" />
                   <p className="font-medium">No products yet</p>
-                  <p className="text-sm mt-1">Add your first product to start managing stock</p>
+                  <p className="mt-1 text-sm">
+                    Add your first product to start managing stock
+                  </p>
                 </TableCell>
               </TableRow>
             )}
-            {!loading && filteredProducts.map((p) => {
-              const isLow = p.currentStock < 10
-              const pct = Math.min(100, (p.currentStock / Math.max(1, 100)) * 100)
-              return (
-                <TableRow
-                  key={p.id}
-                  className={cn("hover:bg-muted/20 transition-colors", isLow && "bg-amber-500/3")}
-                >
-                  <TableCell>
-                    <div className="w-10 h-10 rounded-md border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden">
-                      {p.imageUrl ? (
-                        <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <Package size={20} className="text-muted-foreground/50" />
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium text-[13px] text-foreground">{p.name}</TableCell>
-                  <TableCell className="font-mono text-[11px] text-muted-foreground">{p.sku || "—"}</TableCell>
-                  <TableCell className="font-bold text-[13px]">{formatINR(p.price)}</TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <span className={cn("text-sm font-bold", isLow ? "text-amber-500" : "text-emerald-500")}>
-                        {p.currentStock} {p.unitOfMeasure}
-                      </span>
-                      <div className="h-1 w-24 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={cn("h-full rounded-full", isLow ? "bg-amber-500" : "bg-emerald-500")}
-                          style={{ width: `${pct}%` }}
-                        />
+            {!loading &&
+              filteredProducts.map((p) => {
+                const isLow = p.currentStock < 10
+                const pct = Math.min(
+                  100,
+                  (p.currentStock / Math.max(1, 100)) * 100
+                )
+                return (
+                  <TableRow
+                    key={p.id}
+                    className={cn(
+                      "transition-colors hover:bg-muted/20",
+                      isLow && "bg-amber-500/3"
+                    )}
+                  >
+                    <TableCell>
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
+                        {p.imageUrl ? (
+                          <img
+                            src={p.imageUrl}
+                            alt={p.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Package
+                            size={20}
+                            className="text-muted-foreground/50"
+                          />
+                        )}
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-semibold text-[13px]">{formatINR(p.currentStock * p.price)}</TableCell>
-                  <TableCell>
-                    <span className={cn(
-                      "badge-status",
-                      isLow
-                        ? "bg-amber-500/15 text-amber-500"
-                        : "bg-emerald-500/15 text-emerald-500"
-                    )}>
-                      {isLow ? "⚠ Low Stock" : "✓ In Stock"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 gap-1"
-                        onClick={() => router.push(`/products/${p.id}`)}
+                    </TableCell>
+                    <TableCell className="text-[13px] font-medium text-foreground">
+                      {p.name}
+                    </TableCell>
+                    <TableCell className="font-mono text-[11px] text-muted-foreground">
+                      {p.sku || "—"}
+                    </TableCell>
+                    <TableCell className="text-[13px] font-bold">
+                      {formatINR(p.price)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <span
+                          className={cn(
+                            "text-sm font-bold",
+                            isLow ? "text-amber-500" : "text-emerald-500"
+                          )}
+                        >
+                          {p.currentStock} {p.unitOfMeasure}
+                        </span>
+                        <div className="h-1 w-24 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className={cn(
+                              "h-full rounded-full",
+                              isLow ? "bg-amber-500" : "bg-emerald-500"
+                            )}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-[13px] font-semibold">
+                      {formatINR(p.currentStock * p.price)}
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={cn(
+                          "badge-status",
+                          isLow
+                            ? "bg-amber-500/15 text-amber-500"
+                            : "bg-emerald-500/15 text-emerald-500"
+                        )}
                       >
-                        <Eye size={14} /> View
-                      </Button>
-                      {canManage && (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 gap-1"
-                            onClick={() => openEdit(p)}
-                          >
-                            <PencilSimple size={14} /> Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 gap-1"
-                            onClick={() => {
-                              setStockDialog(p)
-                              setStockQty(0)
-                              setStockInvoiceDetails("")
-                            }}
-                          >
-                            <ArrowUp size={12} weight="bold" /> Restock
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
+                        {isLow ? "⚠ Low Stock" : "✓ In Stock"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 gap-1"
+                          onClick={() => router.push(`/products/${p.id}`)}
+                        >
+                          <Eye size={14} /> View
+                        </Button>
+                        {canManage && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 gap-1"
+                              onClick={() => openEdit(p)}
+                            >
+                              <PencilSimple size={14} /> Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1"
+                              onClick={() => {
+                                setStockDialog(p)
+                                setStockQty(0)
+                                setStockInvoiceDetails("")
+                              }}
+                            >
+                              <ArrowUp size={12} weight="bold" /> Restock
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
           </TableBody>
         </Table>
       </div>
@@ -361,44 +507,64 @@ export default function ProductsPage() {
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-heading flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 font-heading">
               <Package size={18} className="text-primary" /> Add New Product
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Product Name *</label>
+              <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Product Name *
+              </label>
               <input
                 value={addForm.name}
-                onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
+                onChange={(e) =>
+                  setAddForm({ ...addForm, name: e.target.value })
+                }
                 placeholder="e.g. Classic White Shirt"
                 className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SKU (optional)</label>
+              <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                SKU (optional)
+              </label>
               <input
                 value={addForm.sku}
-                onChange={(e) => setAddForm({ ...addForm, sku: e.target.value })}
+                onChange={(e) =>
+                  setAddForm({ ...addForm, sku: e.target.value })
+                }
                 placeholder="e.g. SHT-WHT-001 (auto-generated if blank)"
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono"
+                className="w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Selling Price (₹) *</label>
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Selling Price (₹) *
+                </label>
                 <input
-                  type="number" min={0}
+                  type="number"
+                  min={0}
                   value={addForm.price}
-                  onChange={(e) => setAddForm({ ...addForm, price: parseFloat(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setAddForm({
+                      ...addForm,
+                      price: parseFloat(e.target.value) || 0,
+                    })
+                  }
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-bold"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unit</label>
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Unit
+                </label>
                 <select
                   value={addForm.unitOfMeasure}
-                  onChange={(e) => setAddForm({ ...addForm, unitOfMeasure: e.target.value })}
+                  onChange={(e) =>
+                    setAddForm({ ...addForm, unitOfMeasure: e.target.value })
+                  }
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 >
                   <option value="pcs">pcs (pieces)</option>
@@ -410,23 +576,37 @@ export default function ProductsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Starting Stock</label>
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Starting Stock
+                </label>
                 <input
-                  type="number" min={0}
+                  type="number"
+                  min={0}
                   value={addForm.startingStock}
-                  onChange={(e) => setAddForm({ ...addForm, startingStock: parseInt(e.target.value) || 0 })}
+                  onChange={(e) =>
+                    setAddForm({
+                      ...addForm,
+                      startingStock: parseInt(e.target.value) || 0,
+                    })
+                  }
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-bold text-emerald-600"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Product Image</label>
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Product Image
+                </label>
                 <div className="flex items-center gap-3">
                   {addForm.imageUrl ? (
-                    <div className="w-10 h-10 rounded border overflow-hidden shrink-0">
-                      <img src={addForm.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded border">
+                      <img
+                        src={addForm.imageUrl}
+                        alt="Preview"
+                        className="h-full w-full object-cover"
+                      />
                     </div>
                   ) : (
-                    <div className="w-10 h-10 rounded border bg-muted flex items-center justify-center shrink-0">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded border bg-muted">
                       <Package size={16} className="text-muted-foreground" />
                     </div>
                   )}
@@ -435,16 +615,21 @@ export default function ProductsPage() {
                     accept="image/*"
                     onChange={handleImageUpload}
                     disabled={uploadingImage}
-                    className="w-full text-xs file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                    className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-primary/10 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-primary hover:file:bg-primary/20"
                   />
                 </div>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddProduct} disabled={!addForm.name.trim() || addForm.price <= 0 || saving}>
-              {saving && <Spinner size={14} className="animate-spin mr-1" />}
+            <Button variant="outline" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddProduct}
+              disabled={!addForm.name.trim() || addForm.price <= 0 || saving}
+            >
+              {saving && <Spinner size={14} className="mr-1 animate-spin" />}
               Add Product
             </Button>
           </DialogFooter>
@@ -452,51 +637,79 @@ export default function ProductsPage() {
       </Dialog>
 
       {/* ── Edit Product Dialog ──────────────────────────────────────────────── */}
-      <Dialog open={!!editDialog} onOpenChange={(o) => !o && setEditDialog(null)}>
+      <Dialog
+        open={!!editDialog}
+        onOpenChange={(o) => !o && setEditDialog(null)}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-heading flex items-center gap-2">
+            <DialogTitle className="flex items-center gap-2 font-heading">
               <PencilSimple size={18} className="text-primary" /> Edit Product
             </DialogTitle>
           </DialogHeader>
           {editDialog && (
             <div className="space-y-3 py-2">
               <p className="text-xs text-muted-foreground">
-                Stock: <span className="font-bold text-foreground">{editDialog.currentStock} {editDialog.unitOfMeasure}</span>
+                Stock:{" "}
+                <span className="font-bold text-foreground">
+                  {editDialog.currentStock} {editDialog.unitOfMeasure}
+                </span>
                 {" · "}use Restock to change quantity
               </p>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Product Name *</label>
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Product Name *
+                </label>
                 <input
                   value={editForm.name}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, name: e.target.value })
+                  }
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">SKU</label>
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  SKU
+                </label>
                 <input
                   value={editForm.sku}
-                  onChange={(e) => setEditForm({ ...editForm, sku: e.target.value })}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-mono"
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, sku: e.target.value })
+                  }
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-sm"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Price (₹) *</label>
+                  <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    Price (₹) *
+                  </label>
                   <input
                     type="number"
                     min={0}
                     value={editForm.price}
-                    onChange={(e) => setEditForm({ ...editForm, price: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        price: parseFloat(e.target.value) || 0,
+                      })
+                    }
                     className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-bold"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unit</label>
+                  <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                    Unit
+                  </label>
                   <select
                     value={editForm.unitOfMeasure}
-                    onChange={(e) => setEditForm({ ...editForm, unitOfMeasure: e.target.value })}
+                    onChange={(e) =>
+                      setEditForm({
+                        ...editForm,
+                        unitOfMeasure: e.target.value,
+                      })
+                    }
                     className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="pcs">pcs</option>
@@ -507,12 +720,18 @@ export default function ProductsPage() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Image</label>
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Image
+                </label>
                 <div className="flex items-center gap-3">
                   {editForm.imageUrl ? (
-                    <img src={editForm.imageUrl} alt="" className="w-10 h-10 rounded border object-cover" />
+                    <img
+                      src={editForm.imageUrl}
+                      alt=""
+                      className="h-10 w-10 rounded border object-cover"
+                    />
                   ) : (
-                    <div className="w-10 h-10 rounded border bg-muted flex items-center justify-center">
+                    <div className="flex h-10 w-10 items-center justify-center rounded border bg-muted">
                       <Package size={16} className="text-muted-foreground" />
                     </div>
                   )}
@@ -528,9 +747,14 @@ export default function ProductsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialog(null)}>Cancel</Button>
-            <Button onClick={handleEditProduct} disabled={saving || !editForm.name.trim() || editForm.price <= 0}>
-              {saving && <Spinner size={14} className="animate-spin mr-1" />}
+            <Button variant="outline" onClick={() => setEditDialog(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleEditProduct}
+              disabled={saving || !editForm.name.trim() || editForm.price <= 0}
+            >
+              {saving && <Spinner size={14} className="mr-1 animate-spin" />}
               Save changes
             </Button>
           </DialogFooter>
@@ -538,31 +762,43 @@ export default function ProductsPage() {
       </Dialog>
 
       {/* ── Add Stock Dialog ─────────────────────────────────────────────────── */}
-      <Dialog open={!!stockDialog} onOpenChange={(o) => !o && setStockDialog(null)}>
+      <Dialog
+        open={!!stockDialog}
+        onOpenChange={(o) => !o && setStockDialog(null)}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-heading flex items-center gap-2">
-              <ArrowUp size={18} className="text-emerald-500" weight="bold" /> Restock
+            <DialogTitle className="flex items-center gap-2 font-heading">
+              <ArrowUp size={18} className="text-emerald-500" weight="bold" />{" "}
+              Restock
             </DialogTitle>
           </DialogHeader>
           {stockDialog && (
             <div className="space-y-4 py-2">
               <div className="rounded-lg bg-muted/30 px-4 py-3">
-                <p className="font-semibold text-sm">{stockDialog.name}</p>
-                <p className="text-[12px] text-muted-foreground mt-0.5">
+                <p className="text-sm font-semibold">{stockDialog.name}</p>
+                <p className="mt-0.5 text-[12px] text-muted-foreground">
                   Current stock:{" "}
-                  <span className={cn("font-bold", stockDialog.currentStock < 10 ? "text-amber-500" : "text-emerald-500")}>
+                  <span
+                    className={cn(
+                      "font-bold",
+                      stockDialog.currentStock < 10
+                        ? "text-amber-500"
+                        : "text-emerald-500"
+                    )}
+                  >
                     {stockDialog.currentStock} {stockDialog.unitOfMeasure}
                   </span>
                 </p>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                   Quantity to Add *
                 </label>
                 <input
-                  type="number" min={1}
+                  type="number"
+                  min={1}
                   value={stockQty || ""}
                   onChange={(e) => setStockQty(parseInt(e.target.value) || 0)}
                   placeholder="e.g. 50"
@@ -570,8 +806,11 @@ export default function ProductsPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Invoice Details <span className="text-muted-foreground font-normal">(optional)</span>
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  Invoice Details{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (optional)
+                  </span>
                 </label>
                 <input
                   value={stockInvoiceDetails}
@@ -582,21 +821,26 @@ export default function ProductsPage() {
               </div>
 
               {stockQty > 0 && (
-                <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">New stock level will be</span>
+                <div className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5">
+                  <span className="text-xs text-muted-foreground">
+                    New stock level will be
+                  </span>
                   <span className="font-bold text-emerald-500">
-                    {stockDialog.currentStock + stockQty} {stockDialog.unitOfMeasure}
+                    {stockDialog.currentStock + stockQty}{" "}
+                    {stockDialog.unitOfMeasure}
                   </span>
                 </div>
               )}
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setStockDialog(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setStockDialog(null)}>
+              Cancel
+            </Button>
             <Button
               onClick={handleAddStock}
               disabled={stockQty <= 0 || saving}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+              className="gap-1.5 border-0 bg-emerald-600 text-white hover:bg-emerald-700"
             >
               {saving && <Spinner size={14} className="animate-spin" />}
               <ArrowUp size={14} weight="bold" /> Add Stock

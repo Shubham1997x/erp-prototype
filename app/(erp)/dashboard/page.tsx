@@ -159,7 +159,7 @@ export default function DashboardPage() {
   const topProductTotal = topProductsData.reduce((sum, item) => sum + item.revenue, 0)
 
   return (
-    <div className="flex-1 space-y-6 px-10 p-6 max-w-[1600px] mx-auto">
+    <div className="flex-1 space-y-6 p-4 sm:p-6 sm:px-8 lg:px-10 max-w-[1600px] mx-auto">
       <title>Dashboard | ShirtCo ERP</title>
       {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -235,7 +235,7 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-3">
 
         {/* Trend Area Chart (Spans 2 cols) */}
-        <Card className="col-span-2 shadow-sm">
+        <Card className="col-span-1 md:col-span-2 shadow-sm">
           <CardHeader>
             <CardTitle>Revenue Trend</CardTitle>
             <CardDescription>Trailing 7-day revenue performance</CardDescription>
@@ -289,7 +289,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Recent Orders List (1 col) */}
-        <Card className="col-span-1 shadow-sm flex flex-col">
+        <Card className="col-span-1 shadow-sm flex flex-col min-w-0">
           <CardHeader>
             <CardTitle>Recent Orders</CardTitle>
             <CardDescription>Latest {recentOrders.length} orders</CardDescription>
@@ -315,31 +315,30 @@ export default function DashboardPage() {
                   const initials = (customer?.name ?? "U").split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
                   const statusColor = STATUS_COLORS[so.status] ?? "bg-muted text-muted-foreground"
                   return (
-                    <div key={so.id} className="flex items-center group">
-                      <Avatar className="h-9 w-9 border border-border/50">
+                    <div key={so.id} className="group flex items-center gap-3">
+                      <Avatar className="h-8 w-8 shrink-0 border border-border/50">
                         {customer?.id && (
                           <AvatarImage src={`https://picsum.photos/seed/${customer.id}/100/100`} alt={customer.name} className="object-cover" />
                         )}
-                        <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                        <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                           {initials}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="ml-3 space-y-0.5 flex-1 min-w-0">
-                        <p className="text-sm font-semibold leading-none truncate">
-                          {customer?.name ?? "Unknown"}
-                        </p>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-[10px] text-muted-foreground truncate">{formatDate(so.createdAt)}</p>
-                          {so.salesPersonName && (
-                            <p className="text-[10px] text-muted-foreground truncate">· {so.salesPersonName}</p>
-                          )}
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${statusColor}`}>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate text-sm font-semibold leading-none">
+                            {customer?.name ?? "Unknown"}
+                          </p>
+                          <p className="shrink-0 font-mono text-xs font-semibold tabular-nums">
+                            {formatINR(total)}
+                          </p>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5">
+                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${statusColor}`}>
                             {so.status.replace(/_/g, " ")}
                           </span>
+                          <p className="truncate text-[10px] text-muted-foreground">{formatDate(so.createdAt)}</p>
                         </div>
-                      </div>
-                      <div className="ml-auto font-mono font-semibold text-xs">
-                        {formatINR(total)}
                       </div>
                     </div>
                   )

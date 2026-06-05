@@ -108,8 +108,8 @@ export async function POST(req: Request) {
            body.requestedDeliveryDate ?? null, creditCheckPassed ? 1 : 0)
 
     for (const line of body.lines) {
-      db.prepare("INSERT INTO sales_order_lines (order_id, product_id, qty, unit_price) VALUES (?,?,?,?)")
-        .run(id, line.productId, line.qty, line.unitPrice)
+      db.prepare("INSERT INTO sales_order_lines (order_id, product_id, qty, unit_price, gst_rate) VALUES (?,?,?,?,?)")
+        .run(id, line.productId, line.qty, line.unitPrice, line.gstRate ?? null)
     }
 
     writeAuditLog(db, {

@@ -108,6 +108,16 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
   // Edit order
   const [editOpen, setEditOpen] = useState(false)
 
+  // Inline GST editing (DRAFT only)
+  const [draftGst, setDraftGst] = useState<Record<number, number | null>>({})
+  const [savingGst, setSavingGst] = useState(false)
+  const gstDirty = Object.keys(draftGst).length > 0
+
+  function getLineGst(lineIdx: number, line: SalesOrderLine): number {
+    const v = draftGst[lineIdx] !== undefined ? draftGst[lineIdx] : line.gstRate
+    return v ?? 0
+  }
+
   // Keep order + notifications fresh for sales while waiting on inventory (no manual reload)
   useEffect(() => {
     if (loadingUser || !order || (!isSales && !isAdmin)) return
@@ -167,6 +177,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     : []
   const hasShortages = currentShortages.length > 0
 
+  const allGstSet = order.lines.length > 0 && order.lines.every((l) => l.gstRate !== null && l.gstRate !== undefined)
   const canCheck = isSales && ["DRAFT", "SUBMITTED", "INVENTORY_CHECK", "APPROVED", "IN_PRODUCTION", "PARTIALLY_FULFILLED", "CREDIT_HOLD"].includes(order.status)
   const checkStockLabel =
     order.status === "APPROVED" || order.status === "IN_PRODUCTION" || order.status === "PARTIALLY_FULFILLED"
@@ -354,6 +365,28 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
     setEditOpen(true)
   }
 
+  async function handleSaveGst() {
+    if (!order || !gstDirty) return
+    setSavingGst(true)
+    try {
+      const lines = order.lines.map((l, i) => {
+        const gstVal = draftGst[i] !== undefined ? draftGst[i] : l.gstRate
+        return { productId: l.productId, qty: l.qty, unitPrice: l.unitPrice, gstRate: gstVal ?? null }
+      })
+      await apiPost(`/api/sales-orders/${order.id}/amend`, {
+        changeSummary: "Updated GST rates on order lines",
+        lines,
+      })
+      setDraftGst({})
+      await refetch()
+      toast.success("GST rates saved")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to save GST")
+    } finally {
+      setSavingGst(false)
+    }
+  }
+
   function openRestockDialog() {
     const shortages: Shortage[] = order!.lines
       .map((l) => {
@@ -411,10 +444,16 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                   </Button>
                 )}
                 {canCheck && (
-                  <Button onClick={handleCheckStock} disabled={checking} className="gap-2 bg-primary/90 hover:bg-primary shadow-sm">
-                    {checking ? <Spinner size={16} className="animate-spin" /> : <Check size={16} weight="bold" />}
-                    {checkStockLabel}
-                  </Button>
+                  <div title={order.status === "DRAFT" && !allGstSet ? "Set GST rates on all lines before checking stock" : undefined}>
+                    <Button
+                      onClick={handleCheckStock}
+                      disabled={checking || (order.status === "DRAFT" && !allGstSet)}
+                      className="gap-2 bg-primary/90 hover:bg-primary shadow-sm"
+                    >
+                      {checking ? <Spinner size={16} className="animate-spin" /> : <Check size={16} weight="bold" />}
+                      {checkStockLabel}
+                    </Button>
+                  </div>
                 )}
                 {canRestock && (
                   <Button onClick={openRestockDialog} className="gap-2 bg-amber-600 hover:bg-amber-700 text-white shadow-sm">
@@ -690,85 +729,145 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
       </div>
 
       <div className="glass-card overflow-hidden">
-        <div className="p-5 border-b bg-muted/5 flex items-center gap-2">
-          <ShoppingCart size={16} weight="bold" className="text-muted-foreground" />
-          <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Line Items</h3>
+        <div className="p-5 border-b bg-muted/5 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <ShoppingCart size={16} weight="bold" className="text-muted-foreground" />
+            <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Line Items</h3>
+          </div>
+          {order.status === "DRAFT" && gstDirty && (
+            <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={handleSaveGst} disabled={savingGst}>
+              {savingGst ? <Spinner size={12} className="animate-spin" /> : <Check size={12} weight="bold" />}
+              Save GST
+            </Button>
+          )}
         </div>
-        <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Item Name</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead className="text-right">Quantity</TableHead>
-                  <TableHead className="text-right">Unit Price</TableHead>
-                  <TableHead className="text-right">Tax</TableHead>
-                  <TableHead className="text-right">Subtotal</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {order.lines.map((l, i) => {
-                  const p = allProducts.find((p) => p.id === l.productId)
-                  const lineSubtotal = l.qty * l.unitPrice
-                  // Mock tax calculation for UI demonstration (e.g., 0% for now)
-                  const lineTax = 0
-                  const isOutOfStock = p && p.currentStock < l.qty
 
-                  return (
-                    <TableRow key={i} className="hover:bg-transparent">
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-md border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden">
-                            {p?.imageUrl ? (
-                              <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <Package size={20} className="text-muted-foreground/50" />
-                            )}
-                          </div>
-                          <div>
-                            <div className="font-semibold text-foreground">{p?.name || "Unknown Product"}</div>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{p?.sku || l.productId}</TableCell>
-                      <TableCell className="text-right font-medium">{l.qty}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{formatINR(l.unitPrice)}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{formatINR(lineTax)}</TableCell>
-                      <TableCell className="text-right font-semibold">{formatINR(lineSubtotal + lineTax)}</TableCell>
-                      <TableCell className="text-right w-24">
-                        {isOutOfStock && (
-                          <span className="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
-                            Out of Stock
-                          </span>
+        {order.status === "DRAFT" && !gstDirty && !allGstSet && (
+          <div className="flex items-center gap-2 border-b bg-amber-500/10 border-amber-300/40 dark:border-amber-500/20 px-5 py-2.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <Warning size={13} weight="fill" />
+            GST rates required — set a rate for every line before you can check stock &amp; reserve.
+          </div>
+        )}
+        {order.status === "DRAFT" && !gstDirty && allGstSet && (
+          <div className="flex items-center gap-2 border-b bg-emerald-500/5 border-emerald-300/30 dark:border-emerald-500/20 px-5 py-2.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+            <Check size={13} weight="bold" />
+            GST rates set on all lines — you can now check stock &amp; reserve.
+          </div>
+        )}
+
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Item Name</TableHead>
+              <TableHead className="hidden sm:table-cell">SKU</TableHead>
+              <TableHead className="text-right">Qty</TableHead>
+              <TableHead className="text-right">Unit Price</TableHead>
+              <TableHead className="text-right">GST</TableHead>
+              <TableHead className="text-right">Subtotal</TableHead>
+              <TableHead className="w-24"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {order.lines.map((l, i) => {
+              const p = allProducts.find((p) => p.id === l.productId)
+              const lineBase = l.qty * l.unitPrice
+              const gstRate = getLineGst(i, l)
+              const lineTax = lineBase * (gstRate / 100)
+              const isOutOfStock = p && p.currentStock < l.qty
+
+              return (
+                <TableRow key={i} className="hover:bg-muted/20">
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-md border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden">
+                        {p?.imageUrl ? (
+                          <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Package size={20} className="text-muted-foreground/50" />
                         )}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-            <div className="bg-muted/10 p-6 border-t flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-              <div className="font-bold text-foreground">Total</div>
-              <div className="w-full md:w-64 space-y-3">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="font-medium">{formatINR(total)}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Tax</span>
-                  <span className="font-medium">{formatINR(0)}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Shipping</span>
-                  <span className="font-medium">{formatINR(0)}</span>
-                </div>
-                <div className="pt-4 mt-1 border-t flex justify-between items-center">
-                  <span className="font-bold text-foreground">Total</span>
-                  <span className="font-bold text-xl text-foreground">{formatINR(total)}</span>
-                </div>
-              </div>
+                      </div>
+                      <div className="font-semibold text-foreground">{p?.name || "Unknown Product"}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden font-mono text-xs text-muted-foreground sm:table-cell">{p?.sku || l.productId}</TableCell>
+                  <TableCell className="text-right font-medium">{l.qty}</TableCell>
+                  <TableCell className="text-right text-muted-foreground">{formatINR(l.unitPrice)}</TableCell>
+                  <TableCell className="text-right">
+                    {order.status === "DRAFT" ? (() => {
+                      const savedGst = l.gstRate
+                      const currentVal = draftGst[i] !== undefined ? draftGst[i] : savedGst
+                      const isUnset = currentVal === null || currentVal === undefined
+                      return (
+                        <select
+                          value={isUnset ? "" : String(currentVal)}
+                          onChange={(e) => {
+                            const v = e.target.value === "" ? null : parseFloat(e.target.value)
+                            setDraftGst((prev) => ({ ...prev, [i]: v as number }))
+                          }}
+                          className={cn(
+                            "rounded-md border px-2 py-1 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-primary/30",
+                            isUnset
+                              ? "border-amber-400 bg-amber-500/5 text-amber-700 dark:text-amber-400"
+                              : "border-input bg-background"
+                          )}
+                        >
+                          <option value="" disabled>— Select GST —</option>
+                          <option value={0}>Exempt (0%)</option>
+                          <option value={5}>5%</option>
+                          <option value={12}>12%</option>
+                          <option value={18}>18%</option>
+                          <option value={28}>28%</option>
+                        </select>
+                      )
+                    })() : (
+                      <span className="text-muted-foreground text-sm">
+                        {gstRate > 0 ? `${gstRate}%` : "Exempt"}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right font-semibold">
+                    <div>{formatINR(lineBase + lineTax)}</div>
+                    {lineTax > 0 && (
+                      <div className="text-[10px] font-normal text-muted-foreground">
+                        +{formatINR(lineTax)} GST
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right w-24">
+                    {isOutOfStock && (
+                      <span className="inline-flex items-center rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
+                        Out of Stock
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+
+        <div className="bg-muted/10 p-6 border-t flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+          <div className="font-bold text-foreground">Total</div>
+          <div className="w-full md:w-64 space-y-3">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-medium">{formatINR(total)}</span>
             </div>
-          
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">GST</span>
+              <span className="font-medium">{formatINR(order.lines.reduce((s, l, i) => s + l.qty * l.unitPrice * (getLineGst(i, l) / 100), 0))}</span>
+            </div>
+            <div className="pt-4 mt-1 border-t flex justify-between items-center">
+              <span className="font-bold text-foreground">Total</span>
+              <span className="font-bold text-xl text-foreground">
+                {formatINR(order.lines.reduce((s, l, i) => {
+                  const base = l.qty * l.unitPrice
+                  return s + base + base * (getLineGst(i, l) / 100)
+                }, 0))}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Dialogs */}
@@ -805,8 +904,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             <p className="text-sm text-muted-foreground">
               Please enter the restock details for the items that are currently short.
             </p>
-            {restockDialog?.map((s) => (
-              <div key={s.productId} className="grid grid-cols-12 gap-3 items-end border-b pb-4 last:border-0">
+            {restockDialog?.map((s, idx) => (
+              <div key={idx} className="grid grid-cols-12 gap-3 items-end border-b pb-4 last:border-0">
                 <div className="col-span-5">
                   <label className="text-xs font-semibold text-muted-foreground">Product</label>
                   <div className="text-sm font-medium mt-1 truncate">{s.name}</div>

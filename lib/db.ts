@@ -696,6 +696,12 @@ function runMigrations(db: Database.Database) {
 
     db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (9)").run()
   }
+
+  // v10: gst_rate on sales_order_lines
+  if (!ran.has(10)) {
+    addCol(db, "sales_order_lines", "gst_rate", "REAL")
+    db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (10)").run()
+  }
 }
 
 // ─── Seed data ────────────────────────────────────────────────────────────────

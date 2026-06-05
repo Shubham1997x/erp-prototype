@@ -86,7 +86,7 @@ export function fulfillSalesOrder(
   const lines = getOrderLines(db, orderId)
 
   for (const line of lines) {
-    db.prepare("UPDATE products SET current_stock = current_stock - ? WHERE id=?")
+    db.prepare("UPDATE products SET current_stock = MAX(0, current_stock - ?) WHERE id=?")
       .run(line.qty, line.product_id)
 
     db.prepare(`
@@ -111,8 +111,8 @@ export function fulfillSalesOrder(
     const createdBy = order.created_by as string | undefined
     const notif = {
       type: "SO_RESTOCK_COMPLETE",
-      title: `${orderId} restocked — ready to ship`,
-      message: `Inventory has restocked order ${orderId}. Stock is available; you can proceed with shipping.`,
+      title: `Order ${(order.order_number as string | undefined) ?? orderId} restocked — ready to ship`,
+      message: `Inventory has restocked order ${(order.order_number as string | undefined) ?? orderId}. Stock is available; you can proceed with shipping.`,
       entityType: "sales_order",
       entityId: orderId,
     }

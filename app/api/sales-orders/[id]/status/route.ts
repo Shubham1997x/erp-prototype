@@ -19,6 +19,8 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/sales-orders/[
   const db  = getDb()
   const now = new Date().toISOString()
 
+  const orderNum = (db.prepare("SELECT order_number FROM sales_orders WHERE id=?").get(id) as { order_number?: string } | undefined)?.order_number ?? id
+
   try {
     const result = db.transaction(() => {
       const order = db.prepare("SELECT * FROM sales_orders WHERE id=?").get(id) as
@@ -61,8 +63,8 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/sales-orders/[
           createNotification(db, {
             role: "Inventory Manager",
             type: "SO_NEEDS_RESTOCK",
-            title: `${id} needs restock`,
-            message: `Sales order ${id} is short on ${stockShortages.length} product(s).`,
+            title: `Order ${orderNum} needs restock`,
+            message: `Order ${orderNum} is short on ${stockShortages.length} product(s).`,
             entityType: "sales_order",
             entityId: id,
           })
@@ -87,8 +89,8 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/sales-orders/[
           createNotification(db, {
             role: "Production Manager",
             type: "SO_APPROVED",
-            title: `Sales Order ${id} approved`,
-            message: `SO ${id} is ready for production planning.`,
+            title: `Order ${orderNum} approved`,
+            message: `Order ${orderNum} is ready for production planning.`,
             entityType: "sales_order",
             entityId: id,
           })
@@ -138,8 +140,8 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/sales-orders/[
         createNotification(db, {
           role: "Inventory Manager",
           type: "READY_TO_SHIP",
-          title: `${id} ready to ship`,
-          message: `Sales order ${id} is ready for shipment dispatch.`,
+          title: `Order ${orderNum} ready to ship`,
+          message: `Order ${orderNum} is ready for shipment dispatch.`,
           entityType: "sales_order",
           entityId: id,
         })

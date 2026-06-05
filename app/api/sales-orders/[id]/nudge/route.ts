@@ -20,8 +20,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   const db = getDb()
 
-  const order = db.prepare("SELECT id, status, customer_id FROM sales_orders WHERE id = ?").get(id) as
-    | { id: string; status: string; customer_id: string }
+  const order = db.prepare("SELECT id, status, customer_id, order_number FROM sales_orders WHERE id = ?").get(id) as
+    | { id: string; status: string; customer_id: string; order_number?: string }
     | undefined
 
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 })
@@ -34,12 +34,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     | undefined
 
   const customerName = customer?.name ?? "Unknown customer"
+  const orderNum = order.order_number ?? id
 
   createNotification(db, {
     role: "Inventory Manager",
     type: "SO_NUDGE_RESTOCK",
-    title: `${id} — restock reminder`,
-    message: `${auth.name} nudged inventory to restock order ${id} (${customerName}).`,
+    title: `Order ${orderNum} — restock reminder`,
+    message: `${auth.name} nudged inventory to restock order ${orderNum} (${customerName}).`,
     entityType: "sales_order",
     entityId: id,
   })

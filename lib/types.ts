@@ -93,6 +93,7 @@ export interface SalesOrderLine {
   productId: string
   qty: number
   unitPrice: number
+  gstRate?: number | null
   fulfilledQty?: number
   imageUrl?: string | null
 }

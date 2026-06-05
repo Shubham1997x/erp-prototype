@@ -71,6 +71,7 @@ export function enrichOrder(db: Db, r: Record<string, unknown>) {
       productId: l.product_id,
       qty: l.qty,
       unitPrice: l.unit_price,
+      gstRate: l.gst_rate ?? null,
       fulfilledQty: l.fulfilled_qty ?? 0,
       imageUrl: l.image_url,
     })),

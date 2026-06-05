@@ -46,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   let body: {
     changeSummary: string
-    lines?: Array<{ productId: string; qty: number; unitPrice: number }>
+    lines?: Array<{ productId: string; qty: number; unitPrice: number; gstRate?: number }>
     notes?: string
     customerId?: string
   }
@@ -113,9 +113,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
       for (const line of lines) {
         db.prepare(`
-          INSERT INTO sales_order_lines (order_id, product_id, qty, unit_price, fulfilled_qty)
-          VALUES (?, ?, ?, ?, 0)
-        `).run(id, line.productId, line.qty, line.unitPrice)
+          INSERT INTO sales_order_lines (order_id, product_id, qty, unit_price, gst_rate, fulfilled_qty)
+          VALUES (?, ?, ?, ?, ?, 0)
+        `).run(id, line.productId, line.qty, line.unitPrice, line.gstRate ?? null)
       }
     }
 

@@ -1,11 +1,22 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Check, Bell, ArrowRight, Package, Warning, Info, CheckCircle } from "@phosphor-icons/react"
+import {
+  Check,
+  Bell,
+  ArrowRight,
+  Package,
+  Warning,
+  Info,
+  CheckCircle,
+} from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
-import { useNotifications, type AppNotification } from "@/components/providers/notification-provider"
+import {
+  useNotifications,
+  type AppNotification,
+} from "@/components/providers/notification-provider"
 import {
   formatNotificationTime,
   formatNotificationTimeFull,
@@ -34,7 +45,14 @@ const GROUP_ORDER = [
 
 function groupKey(type?: string): string {
   if (!type) return "__other__"
-  if (["SO_NEEDS_RESTOCK", "SO_RESTOCK_COMPLETE", "SO_NUDGE_RESTOCK", "LOW_STOCK"].includes(type))
+  if (
+    [
+      "SO_NEEDS_RESTOCK",
+      "SO_RESTOCK_COMPLETE",
+      "SO_NUDGE_RESTOCK",
+      "LOW_STOCK",
+    ].includes(type)
+  )
     return type
   return "__other__"
 }
@@ -75,13 +93,26 @@ function useGrouped(items: AppNotification[]) {
       if (!map.has(k)) map.set(k, [])
       map.get(k)!.push(n)
     }
-    const ordered: { key: string; label: string; items: GroupedNotification[] }[] = []
+    const ordered: {
+      key: string
+      label: string
+      items: GroupedNotification[]
+    }[] = []
     for (const k of GROUP_ORDER) {
-      if (map.has(k)) ordered.push({ key: k, label: GROUP_LABELS[k], items: deduplicate(map.get(k)!) })
+      if (map.has(k))
+        ordered.push({
+          key: k,
+          label: GROUP_LABELS[k],
+          items: deduplicate(map.get(k)!),
+        })
     }
     for (const [k, its] of map.entries()) {
       if (!ordered.find((g) => g.key === k)) {
-        ordered.push({ key: k, label: GROUP_LABELS[k] ?? k, items: deduplicate(its) })
+        ordered.push({
+          key: k,
+          label: GROUP_LABELS[k] ?? k,
+          items: deduplicate(its),
+        })
       }
     }
     return ordered
@@ -105,22 +136,23 @@ export default function NotificationsPage() {
   const isEmpty = visibleUnread.length === 0 && visibleRead.length === 0
 
   return (
-    <div className="flex flex-col min-h-full">
+    <div className="flex min-h-full flex-col">
       <title>Notifications | ShirtCo ERP</title>
 
       {/* Sticky header */}
-      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur border-b px-4 sm:px-6 lg:px-10 py-3">
-        <div className="mx-auto max-w-3xl flex items-center justify-between gap-4">
+      <div className="sticky top-0 z-10  bg-background/80 px-4 py-3 backdrop-blur sm:px-6 lg:px-10">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
           <div className="flex items-baseline gap-3">
-            <h1 className="text-lg font-bold tracking-tight">Notifications</h1>
             {unread > 0 && (
-              <span className="text-xs font-medium text-muted-foreground">{unread} unread</span>
+              <span className="text-xs font-medium text-muted-foreground">
+                {unread} unread
+              </span>
             )}
           </div>
 
           <div className="flex items-center gap-2">
             {/* Filter tabs */}
-            <div className="flex rounded-lg border bg-muted/40 p-0.5 text-xs font-medium">
+            <div className="flex rounded-lg   p-0.5 text-xs font-medium">
               {(["all", "unread", "read"] as FilterTab[]).map((tab) => (
                 <button
                   key={tab}
@@ -159,14 +191,18 @@ export default function NotificationsPage() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 px-4 sm:px-6 lg:px-10 py-5">
-        <div className="mx-auto max-w-3xl space-y-5">
-
+      <div className="flex-1 px-4 py-5 sm:px-6 lg:px-10">
+        <div className="mx-auto max-w-7xl space-y-5">
           {/* Loading */}
           {loading && items.length === 0 && (
             <div className="flex flex-col items-center gap-3 py-24">
-              <Bell size={32} className="animate-pulse text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">Loading notifications…</p>
+              <Bell
+                size={32}
+                className="animate-pulse text-muted-foreground/40"
+              />
+              <p className="text-sm text-muted-foreground">
+                Loading notifications…
+              </p>
             </div>
           )}
 
@@ -177,7 +213,9 @@ export default function NotificationsPage() {
                 <Check size={28} className="text-emerald-500" weight="bold" />
               </div>
               <p className="text-base font-semibold">
-                {activeTab === "unread" ? "No unread notifications" : "You're all caught up!"}
+                {activeTab === "unread"
+                  ? "No unread notifications"
+                  : "You're all caught up!"}
               </p>
               <p className="text-sm text-muted-foreground">
                 {activeTab === "unread"
@@ -196,7 +234,7 @@ export default function NotificationsPage() {
                 accent
                 onMarkAll={() => void markAllRead()}
               />
-              <div className="mt-2 divide-y rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
+              <div className="mt-2 divide-y overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
                 {deduplicate(visibleUnread).map((n) => (
                   <NotifRow
                     key={n.ids.join(",")}
@@ -215,7 +253,7 @@ export default function NotificationsPage() {
             .map((g) => (
               <section key={g.key}>
                 <GroupLabel label={g.label} type={g.key} />
-                <div className="mt-1.5 divide-y rounded-xl border border-border/60 bg-card shadow-sm overflow-hidden">
+                <div className="mt-1.5 divide-y overflow-hidden rounded-xl border border-border/60 bg-card shadow-sm">
                   {g.items.map((n) => (
                     <NotifRow key={n.ids.join(",")} n={n} muted />
                   ))}
@@ -246,7 +284,7 @@ function SectionHeading({
       <div className="flex items-center gap-2">
         <h2
           className={cn(
-            "text-xs font-bold uppercase tracking-wider",
+            "text-xs font-bold tracking-wider uppercase",
             accent ? "text-primary" : "text-muted-foreground"
           )}
         >
@@ -255,7 +293,9 @@ function SectionHeading({
         <span
           className={cn(
             "rounded-full px-1.5 py-px text-[10px] font-bold",
-            accent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+            accent
+              ? "bg-primary/10 text-primary"
+              : "bg-muted text-muted-foreground"
           )}
         >
           {count}
@@ -265,7 +305,7 @@ function SectionHeading({
         <button
           type="button"
           onClick={onMarkAll}
-          className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
           <Check size={11} />
           Mark all read
@@ -280,7 +320,7 @@ function GroupLabel({ label, type }: { label: string; type: string }) {
   return (
     <div className="flex items-center gap-2 pl-1">
       <span className={cn("size-2 rounded-full", meta.accent)} />
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      <span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
         {label}
       </span>
     </div>
@@ -299,7 +339,9 @@ function NotifRow({
   const meta = notificationTypeMeta(n.type)
   const summary = notificationSummary(n.title, n.message, n.entityId)
   const href =
-    n.entityType === "sales_order" && n.entityId ? `/orders/${n.entityId}` : undefined
+    n.entityType === "sales_order" && n.entityId
+      ? `/orders/${n.entityId}`
+      : undefined
 
   function handleRowClick() {
     if (!n.isRead) onMarkRead?.()
@@ -313,7 +355,7 @@ function NotifRow({
   return (
     <div
       className={cn(
-        "group flex items-start gap-3 px-4 py-3 transition-colors cursor-default",
+        "group flex cursor-default items-start gap-3 px-4 py-3 transition-colors",
         !n.isRead && "bg-primary/[0.035] hover:bg-primary/[0.06]",
         n.isRead && "hover:bg-muted/40",
         muted && "opacity-60 hover:opacity-100"
@@ -335,18 +377,26 @@ function NotifRow({
           iconColorClass
         )}
       >
-        {n.type === "SO_NEEDS_RESTOCK" ? <Package size={14} weight="bold" /> :
-         n.type === "SO_RESTOCK_COMPLETE" ? <CheckCircle size={14} weight="bold" /> :
-         n.type === "LOW_STOCK" ? <Warning size={14} weight="bold" /> :
-         n.type === "SO_NUDGE_RESTOCK" ? <Bell size={14} weight="bold" /> :
-         <Info size={14} weight="bold" />}
+        {n.type === "SO_NEEDS_RESTOCK" ? (
+          <Package size={14} weight="bold" />
+        ) : n.type === "SO_RESTOCK_COMPLETE" ? (
+          <CheckCircle size={14} weight="bold" />
+        ) : n.type === "LOW_STOCK" ? (
+          <Warning size={14} weight="bold" />
+        ) : n.type === "SO_NUDGE_RESTOCK" ? (
+          <Bell size={14} weight="bold" />
+        ) : (
+          <Info size={14} weight="bold" />
+        )}
       </div>
 
       {/* Body */}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-muted-foreground">{meta.label}</span>
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              {meta.label}
+            </span>
             {n.count > 1 && (
               <span className="rounded-full bg-muted/80 px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
                 ×{n.count}
@@ -354,36 +404,40 @@ function NotifRow({
             )}
           </div>
           <span
-            className="shrink-0 text-[10px] tabular-nums text-muted-foreground cursor-default"
+            className="shrink-0 cursor-default text-[10px] text-muted-foreground tabular-nums"
             title={formatNotificationTimeFull(n.createdAt)}
           >
             {formatNotificationTime(n.createdAt)}
           </span>
         </div>
-        <p className="mt-0.5 text-sm font-medium leading-snug text-foreground">
+        <p className="mt-0.5 text-sm leading-snug font-medium text-foreground">
           {href && n.entityId ? (
             <>
-              {summary.split(new RegExp(`(${n.entityId})`, "i")).map((part, i) =>
-                part.toLowerCase() === n.entityId!.toLowerCase() ? (
-                  <Link
-                    key={i}
-                    href={href}
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-primary hover:underline font-mono text-xs"
-                  >
-                    {part}
-                  </Link>
-                ) : (
-                  <span key={i}>{part}</span>
-                )
-              )}
+              {summary
+                .split(new RegExp(`(${n.entityId})`, "i"))
+                .map((part, i) =>
+                  part.toLowerCase() === n.entityId!.toLowerCase() ? (
+                    <Link
+                      key={i}
+                      href={href}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-mono text-xs text-primary hover:underline"
+                    >
+                      {part}
+                    </Link>
+                  ) : (
+                    <span key={i}>{part}</span>
+                  )
+                )}
             </>
           ) : (
             summary
           )}
         </p>
         {n.message && summary !== n.message && (
-          <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+            {n.message}
+          </p>
         )}
       </div>
 
@@ -392,9 +446,12 @@ function NotifRow({
         {!n.isRead && onMarkRead && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onMarkRead() }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onMarkRead()
+            }}
             title="Mark as read"
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <Check size={13} />
           </button>
@@ -404,7 +461,7 @@ function NotifRow({
             href={href}
             onClick={(e) => e.stopPropagation()}
             title="Open order"
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <ArrowRight size={13} />
           </Link>

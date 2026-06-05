@@ -43,13 +43,10 @@ export function formatNotificationTimeFull(iso: string): string {
 export function notificationSummary(
   title: string,
   message: string,
-  entityId?: string
+  _entityId?: string
 ): string {
-  const orderRef = entityId?.match(/so-[\w-]+/i)?.[0] ?? entityId
-  if (orderRef && title.includes(orderRef)) return title
-  if (orderRef && !title.toLowerCase().includes(orderRef.toLowerCase())) {
-    return `${title.replace(/\s*—\s*$/, "")} · ${orderRef}`
-  }
+  // Title is the primary summary — use it directly
+  if (title) return title
   if (message.length <= 72) return message
   return message.slice(0, 69) + "…"
 }
