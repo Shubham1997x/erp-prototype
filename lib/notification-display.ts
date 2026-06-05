@@ -29,6 +29,16 @@ export function formatNotificationTime(iso: string): string {
   return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
 }
 
+export function formatNotificationTimeFull(iso: string): string {
+  return new Date(iso).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 /** One-line summary for list UI (avoids title + long message duplication). */
 export function notificationSummary(
   title: string,

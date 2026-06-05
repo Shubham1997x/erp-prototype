@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { useFetch, apiPost } from "@/hooks/use-api"
 import { useUser } from "@/hooks/use-user"
 import type { Customer, Product, SalesOrder, SalesOrderLine, SalesOrderStatus } from "@/lib/types"
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
-  Plus, ShoppingCart, Spinner, Package, X, CaretRight, CheckCircle, Clock, FileArrowDown, MagnifyingGlass, CaretLeft
+  Plus, ShoppingCart, Spinner, Warning, Package, X, CaretRight, CheckCircle, Clock, FileArrowDown
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -25,20 +25,29 @@ function formatDate(iso: string | null | undefined) {
   return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
 }
 
-type OrderTabId = "action_required" | "in_progress" | "completed" | "cancelled"
+type OrderTabId =
+  | "all"
+  | "in_progress"
+  | "needs_restock"
+  | "ready_to_ship"
+  | "shipped"
+  | "completed"
+  | "cancelled"
 
-const STATUS_GROUPS: Record<OrderTabId, SalesOrderStatus[] | null> = {
-  action_required: ["NEEDS_RESTOCK", "READY_TO_SHIP"],
-  in_progress: ["DRAFT", "SUBMITTED", "INVENTORY_CHECK", "APPROVED", "IN_PRODUCTION", "CREDIT_HOLD", "PARTIALLY_FULFILLED", "SHIPPED"],
-  completed: ["DELIVERED", "INVOICED", "PAID", "DISPUTED"],
-  cancelled: ["CANCELLED"],
-}
+const IN_PROGRESS_STATUSES: SalesOrderStatus[] = [
+  "DRAFT", "SUBMITTED", "INVENTORY_CHECK", "APPROVED", "IN_PRODUCTION", "CREDIT_HOLD", "PARTIALLY_FULFILLED",
+]
+const COMPLETED_STATUSES: SalesOrderStatus[] = ["DELIVERED", "INVOICED", "PAID", "DISPUTED"]
 
-const ORDER_TABS: { id: OrderTabId; label: string; icon: React.ElementType }[] = [
-  { id: "action_required", label: "Action Required", icon: Package },
-  { id: "in_progress", label: "In Progress", icon: Clock },
-  { id: "completed", label: "Completed", icon: CheckCircle },
-  { id: "cancelled", label: "Cancelled", icon: X },
+/** Workflow tabs first; "All" is always last. */
+const ORDER_TABS: { id: OrderTabId; label: string; statuses: SalesOrderStatus[] | null }[] = [
+  { id: "in_progress", label: "In progress", statuses: IN_PROGRESS_STATUSES },
+  { id: "needs_restock", label: "Needs restock", statuses: ["NEEDS_RESTOCK"] },
+  { id: "ready_to_ship", label: "Ready to ship", statuses: ["READY_TO_SHIP"] },
+  { id: "shipped", label: "Shipped", statuses: ["SHIPPED"] },
+  { id: "completed", label: "Completed", statuses: COMPLETED_STATUSES },
+  { id: "cancelled", label: "Cancelled", statuses: ["CANCELLED"] },
+  { id: "all", label: "All orders", statuses: null },
 ]
 
 const ORDER_STATUS_DISPLAY: Record<string, { label: string; color: string }> = {
@@ -59,11 +68,37 @@ const ORDER_STATUS_DISPLAY: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: "Cancelled", color: "bg-destructive/15 text-destructive" },
 }
 
+function orderInTab(order: SalesOrder, tab: OrderTabId): boolean {
+  const def = ORDER_TABS.find((t) => t.id === tab)
+  if (!def || def.statuses === null) return true
+  return def.statuses.includes(order.status)
+}
+
+function countForTab(orders: SalesOrder[], tab: OrderTabId): number {
+  return orders.filter((o) => orderInTab(o, tab)).length
+}
+
+interface Shortage {
+  productId: string
+  name: string
+  required: number
+  available: number
+}
+
 interface PaginatedResponse<T> { data: T[]; total: number; page: number; limit: number }
 
 function OrdersContentSkeleton() {
   return (
     <div className="space-y-5 animate-in fade-in duration-200">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="stat-card">
+            <div className="shimmer h-3 w-20 rounded mb-2" />
+            <div className="shimmer h-8 w-12 rounded mb-1" />
+            <div className="shimmer h-3 w-28 rounded" />
+          </div>
+        ))}
+      </div>
       <div className="shimmer h-9 w-full max-w-3xl rounded-lg" />
       <div className="glass-card overflow-hidden p-0">
         <div className="border-b bg-muted/20 px-6 py-4">
@@ -84,53 +119,25 @@ function OrdersContentSkeleton() {
 export default function OrdersPage() {
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
-
   const { isInventory, isSales, isAdmin, loading: loadingUser } = useUser()
 
-  const page = parseInt(searchParams.get("page") ?? "1", 10)
-  const tabParam = (searchParams.get("tab") ?? "action_required") as OrderTabId
-  const qParam = searchParams.get("q") ?? ""
-
-  const resolvedTab = ORDER_TABS.some(t => t.id === tabParam) ? tabParam : "action_required"
-  const statuses = STATUS_GROUPS[resolvedTab]
-
-  // Local state for search debouncing
-  const [searchInput, setSearchInput] = useState(qParam)
-
-  // Debounce search input to update URL query params
   useEffect(() => {
-    if (searchInput === qParam) return
-
-    const handler = setTimeout(() => {
-      const params = new URLSearchParams(searchParams.toString())
-      if (searchInput.trim()) {
-        params.set("q", searchInput.trim())
-      } else {
-        params.delete("q")
-      }
-      params.set("page", "1") // Reset to page 1 on new search
-      router.push(`${pathname}?${params.toString()}`)
-    }, 400)
-    return () => clearTimeout(handler)
-  }, [searchInput, qParam, pathname, router, searchParams])
-
-  // Fetch paginated & filtered data from API
-  const statusQuery = statuses ? statuses.join(",") : ""
-  const url = `/api/sales-orders?page=${page}&limit=12${statusQuery ? `&status=${statusQuery}` : ""}${qParam ? `&q=${encodeURIComponent(qParam)}` : ""}`
-
-  const { data: ordersRes, loading: loadingOrders, refetch } = useFetch<PaginatedResponse<SalesOrder>>(url, [url])
+    if (pathname === "/orders") setActiveTab("all")
+  }, [pathname])
+  const { data: ordersRes, loading: loadingOrders, refetch } = useFetch<PaginatedResponse<SalesOrder> | SalesOrder[]>("/api/sales-orders")
   const { data: customersRes } = useFetch<Customer[] | PaginatedResponse<Customer>>("/api/customers")
   const { data: productsRes } = useFetch<Product[] | PaginatedResponse<Product>>("/api/products")
-  const { data: countsRes } = useFetch<Record<string, number>>("/api/sales-orders/counts")
 
-  // Create order dialog state
+  const [activeTab, setActiveTab] = useState<OrderTabId>("all")
+
+  // Create order dialog
   const [createOpen, setCreateOpen] = useState(false)
   const [customerId, setCustomerId] = useState("")
   const [lines, setLines] = useState<SalesOrderLine[]>([{ productId: "", qty: 1, unitPrice: 0 }])
   const [saving, setSaving] = useState(false)
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null)
 
+  // Unwrap both paginated and array responses
   function unwrap<T>(res: PaginatedResponse<T> | T[] | null | undefined): T[] {
     if (!res) return []
     if (Array.isArray(res)) return res
@@ -138,30 +145,38 @@ export default function OrdersPage() {
     return []
   }
 
+  const allOrders = unwrap(ordersRes)
   const allCustomers = unwrap(customersRes)
   const allProducts = unwrap(productsRes)
 
-  const ordersData = ordersRes && !Array.isArray(ordersRes) ? (ordersRes as PaginatedResponse<SalesOrder>) : { data: [], total: 0, page: 1, limit: 20 }
-  const filteredOrders = ordersData.data
-  const totalPages = Math.ceil(ordersData.total / ordersData.limit)
+  const tabCounts = useMemo(() => {
+    const counts = {} as Record<OrderTabId, number>
+    for (const tab of ORDER_TABS) counts[tab.id] = countForTab(allOrders, tab.id)
+    return counts
+  }, [allOrders])
 
-  const pageReady = !loadingUser
-  const canCreateOrder = isSales
-  const canDownloadInvoice = isSales || isAdmin
+  const pageReady = !loadingOrders && !loadingUser
+
+  const contentReady = pageReady
+  const resolvedTab: OrderTabId = activeTab
 
   function pickTab(tab: OrderTabId) {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set("tab", tab)
-    params.set("page", "1")
-    router.push(`${pathname}?${params.toString()}`)
+    setActiveTab(tab)
   }
 
-  function handlePageChange(newPage: number) {
-    if (newPage < 1 || newPage > totalPages) return
-    const params = new URLSearchParams(searchParams.toString())
-    params.set("page", newPage.toString())
-    router.push(`${pathname}?${params.toString()}`)
-  }
+  const filteredOrders = useMemo(() => {
+    if (!contentReady) return []
+    return allOrders
+      .filter((o) => orderInTab(o, activeTab))
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  }, [allOrders, activeTab, contentReady])
+
+  const inProgressCount = tabCounts.in_progress
+  const needsRestockCount = tabCounts.needs_restock
+  const readyToShipCount = tabCounts.ready_to_ship
+  const completedCount = tabCounts.completed
+  const canCreateOrder = isSales
+  const canDownloadInvoice = isSales || isAdmin
 
   async function handleDownloadInvoice(orderId: string) {
     setDownloadingInvoiceId(orderId)
@@ -200,7 +215,6 @@ export default function OrdersPage() {
       setCreateOpen(false)
       setCustomerId("")
       setLines([{ productId: "", qty: 1, unitPrice: 0 }])
-      pickTab("in_progress")
       refetch()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create order")
@@ -209,16 +223,18 @@ export default function OrdersPage() {
     }
   }
 
+
+
   return (
-    <div className="p-4 sm:p-6 space-y-5 lg:px-10 w-full mx-auto">
+    <div className="p-6 space-y-5 px-10 w-full mx-auto">
       <title>Orders | ShirtCo ERP</title>
 
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold font-heading">Orders</h1>
+          <h1 className="section-title">Orders</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Manage your sales workflows and fulfillments
+            {contentReady ? `${allOrders.length} total orders` : "Loading orders…"}
           </p>
         </div>
         {canCreateOrder && !loadingUser && (
@@ -228,223 +244,259 @@ export default function OrdersPage() {
         )}
       </div>
 
-      {!pageReady ? (
+      {!contentReady ? (
         <OrdersContentSkeleton />
       ) : (
-        <>
-          {/* Top Controls: Search & Tabs */}
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="relative w-full max-w-sm">
-              <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search by ID, customer, notes..."
-                className="w-full rounded-lg border border-input bg-background pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary transition-all"
-              />
-            </div>
+      <>
+      {/* Quick stats — click to jump to tab */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <button
+          type="button"
+          onClick={() => pickTab("in_progress")}
+          className={cn("stat-card text-left transition-colors hover:border-primary/30", resolvedTab === "in_progress" && "ring-1 ring-primary/30")}
+        >
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+            <Clock size={11} /> In progress
+          </p>
+          <p className="text-2xl font-heading font-bold">{inProgressCount}</p>
+          <p className="text-[11px] text-muted-foreground">Draft through production</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => pickTab("needs_restock")}
+          className={cn(
+            "stat-card text-left transition-colors hover:border-amber-500/40",
+            needsRestockCount > 0 && "border-amber-500/30 bg-amber-500/5",
+            resolvedTab === "needs_restock" && "ring-1 ring-amber-500/40"
+          )}
+        >
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+            {needsRestockCount > 0 && <Warning size={11} className="text-amber-500" weight="fill" />}
+            Needs restock
+          </p>
+          <p className={cn("text-2xl font-heading font-bold", needsRestockCount > 0 && "text-amber-500")}>
+            {needsRestockCount}
+          </p>
+          <p className="text-[11px] text-muted-foreground">Waiting on inventory</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => pickTab("ready_to_ship")}
+          className={cn(
+            "stat-card text-left transition-colors hover:border-teal-500/40",
+            readyToShipCount > 0 && "border-teal-500/30 bg-teal-500/5",
+            resolvedTab === "ready_to_ship" && "ring-1 ring-teal-500/40"
+          )}
+        >
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+            <Package size={11} className="text-teal-600 dark:text-teal-400" />
+            Ready to ship
+          </p>
+          <p className={cn("text-2xl font-heading font-bold", readyToShipCount > 0 && "text-teal-600 dark:text-teal-400")}>
+            {readyToShipCount}
+          </p>
+          <p className="text-[11px] text-muted-foreground">Stock OK — ship next</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => pickTab("completed")}
+          className={cn("stat-card text-left transition-colors hover:border-emerald-500/30", resolvedTab === "completed" && "ring-1 ring-emerald-500/30")}
+        >
+          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+            <CheckCircle size={11} className="text-emerald-500" />
+            Completed
+          </p>
+          <p className="text-2xl font-heading font-bold text-emerald-500">{completedCount}</p>
+          <p className="text-[11px] text-muted-foreground">Delivered & paid</p>
+        </button>
+      </div>
 
-            <Tabs value={resolvedTab} onValueChange={(v) => pickTab(v as OrderTabId)} className="w-full md:w-auto overflow-x-auto min-w-0 pb-1">
-              <TabsList className="bg-muted/50 p-1">
-                {ORDER_TABS.map((tab) => {
-                  const Icon = tab.icon
-                  let count = 0
-                  if (countsRes) {
-                    const groupStatuses = STATUS_GROUPS[tab.id]
-                    if (groupStatuses) {
-                      count = groupStatuses.reduce((acc, status) => acc + (countsRes[status] || 0), 0)
-                    } else {
-                      count = Object.values(countsRes).reduce((acc, val) => acc + val, 0)
-                    }
-                  }
-                  
-                  return (
-                    <TabsTrigger key={tab.id} value={tab.id} className="gap-2 px-3 py-1.5 text-xs">
-                      <Icon size={14} className={resolvedTab === tab.id ? "text-primary" : "text-muted-foreground"} />
-                      {tab.label}
-                      {count > 0 && (
-                        <span className="ml-1 flex h-4 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[9px] font-bold text-primary">
-                          {count}
-                        </span>
-                      )}
-                    </TabsTrigger>
-                  )
-                })}
-              </TabsList>
-            </Tabs>
-          </div>
-
-          {/* Orders table */}
-          <div className="glass-card overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="table-header-row bg-muted/20">
-                  <TableHead className="font-semibold text-xs">Order ID</TableHead>
-                  <TableHead className="font-semibold text-xs">Customer</TableHead>
-                  <TableHead className="font-semibold text-xs">Sales rep</TableHead>
-                  <TableHead className="font-semibold text-xs">Date</TableHead>
-                  <TableHead className="font-semibold text-xs">Items</TableHead>
-                  <TableHead className="font-semibold text-xs">Status</TableHead>
-                  <TableHead className="font-semibold text-xs text-right">Total</TableHead>
-                  <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loadingOrders && filteredOrders.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="py-20 text-center text-muted-foreground">
-                      <Spinner size={24} className="animate-spin mx-auto opacity-50" />
-                    </TableCell>
-                  </TableRow>
-                )}
-                {!loadingOrders && filteredOrders.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={8} className="py-20 text-center text-muted-foreground">
-                      <ShoppingCart size={36} className="mx-auto mb-3 opacity-20" />
-                      <p className="font-medium">
-                        {ordersData.total === 0 && !qParam ? "No orders found" : "No results match your search"}
-                      </p>
-                      <p className="text-sm mt-1">
-                        {qParam ? "Try adjusting your search or clear filters" : "Create your first order to get started"}
-                      </p>
-                      {qParam && (
-                        <Button variant="link" size="sm" className="mt-2" onClick={() => { setSearchInput(""); pickTab("action_required"); }}>
-                          Clear search
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )}
-                {filteredOrders.map((order) => {
-                  const cust = allCustomers.find((c) => c.id === order.customerId)
-                  const ui = ORDER_STATUS_DISPLAY[order.status] ?? { label: order.status, color: "bg-muted text-muted-foreground" }
-                  const total = order.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0)
-
-                  const images = order.lines.map(l => l.imageUrl).filter(Boolean) as string[]
-                  const uniqueImages = Array.from(new Set(images))
-
-                  return (
-                    <TableRow
-                      key={order.id}
-                      className="cursor-pointer hover:bg-muted/30 transition-colors"
-                      onClick={() => router.push(`/orders/${order.id}`)}
-                    >
-                      <TableCell>
-                        <div className="font-mono text-xs font-semibold text-primary">{order.orderNumber || order.id}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate max-w-[100px]">{order.id}</div>
-                      </TableCell>
-                      <TableCell className="font-medium text-[13px]">{cust?.name ?? "—"}</TableCell>
-                      <TableCell className="text-[12px]">
-                        <div className="font-medium text-foreground">{order.salesPersonName ?? "—"}</div>
-                        {order.salesPersonId && order.salesPersonName && (
-                          <div className="text-[10px] font-mono text-muted-foreground">{order.salesPersonId}</div>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-[12px] text-muted-foreground">
-                        <div>{formatDate(order.createdAt)}</div>
-                        {order.updatedAt !== order.createdAt && (
-                          <div className="text-[10px] text-muted-foreground/70">Updated {formatDate(order.updatedAt)}</div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="flex items-center group relative h-8 w-16 z-0 hover:z-50 cursor-pointer">
-                            {uniqueImages.slice(0, 5).map((img, idx) => (
-                              <div
-                                key={idx}
-                                className={cn(
-                                  "absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-background bg-muted overflow-hidden transition-all duration-300 ease-out shadow-sm",
-                                  "translate-x-[var(--stack-x)] group-hover:translate-x-[var(--hover-x)]"
-                                )}
-                                style={{ zIndex: 50 - idx, "--stack-x": `${idx * 5}px`, "--hover-x": `${idx * 24}px` } as React.CSSProperties}
-                              >
-                                <img src={img} alt="Product" className="w-full h-full object-cover" />
-                              </div>
-                            ))}
-                            {uniqueImages.length > 5 && (
-                              <div
-                                className={cn(
-                                  "absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold transition-all duration-300 ease-out shadow-sm",
-                                  "translate-x-[var(--stack-x)] group-hover:translate-x-[var(--hover-x)]"
-                                )}
-                                style={{ zIndex: 40, "--stack-x": `${5 * 5}px`, "--hover-x": `${5 * 24}px` } as React.CSSProperties}
-                              >
-                                +{uniqueImages.length - 5}
-                              </div>
-                            )}
-                            {uniqueImages.length === 0 && (
-                              <span className="text-xs text-muted-foreground/50 italic px-2">No images</span>
-                            )}
-                          </div>
-                          <span className="text-xs font-medium text-muted-foreground">{order.lines.length} items</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`badge-status ${ui.color}`}>{ui.label}</span>
-                      </TableCell>
-                      <TableCell className="font-bold text-[13px] text-right">{formatINR(total)}</TableCell>
-                      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1">
-                          {canDownloadInvoice && INVOICE_ELIGIBLE_STATUSES.includes(order.status as (typeof INVOICE_ELIGIBLE_STATUSES)[number]) && (
-                            <Button
-                              variant="ghost" size="sm"
-                              className="h-8 gap-1 text-muted-foreground hover:text-foreground"
-                              disabled={downloadingInvoiceId === order.id}
-                              onClick={() => handleDownloadInvoice(order.id)}
-                              title="Download invoice"
-                            >
-                              {downloadingInvoiceId === order.id ? <Spinner size={14} className="animate-spin" /> : <FileArrowDown size={14} />}
-                              Invoice
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost" size="sm"
-                            className="h-8 gap-1 text-muted-foreground hover:text-foreground"
-                            onClick={() => router.push(`/orders/${order.id}`)}
-                          >
-                            {order.status === "NEEDS_RESTOCK" && isInventory ? "Restock" : "Manage"}
-                            <CaretRight weight="bold" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-
-            {/* Pagination Footer */}
-            {totalPages > 1 && (
-              <div className="border-t px-6 py-4 flex items-center justify-between bg-muted/10">
-                <p className="text-xs text-muted-foreground">
-                  Showing <span className="font-bold text-foreground">{filteredOrders.length}</span> of <span className="font-bold text-foreground">{ordersData.total}</span> orders
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline" size="sm"
-                    className="h-8 gap-1"
-                    onClick={() => handlePageChange(page - 1)}
-                    disabled={page <= 1}
+      {/* Status tabs + new order (mobile / secondary) */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <Tabs value={resolvedTab} onValueChange={(v) => pickTab(v as OrderTabId)} className="gap-3 min-w-0 flex-1">
+            <TabsList variant="line" className="w-full flex-wrap justify-start h-auto gap-0.5 pb-1">
+              {ORDER_TABS.map((tab) => (
+                <TabsTrigger key={tab.id} value={tab.id} className="gap-1.5 px-2.5 py-1.5">
+                  {tab.label}
+                  <span
+                    className={cn(
+                      "tabular-nums rounded-full px-1.5 py-0 text-[10px] font-bold min-w-5 text-center",
+                      resolvedTab === tab.id ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                    )}
                   >
-                    <CaretLeft size={14} /> Previous
-                  </Button>
-                  <span className="text-xs font-medium text-muted-foreground px-2">
-                    Page {page} of {totalPages}
+                    {tabCounts[tab.id]}
                   </span>
-                  <Button
-                    variant="outline" size="sm"
-                    className="h-8 gap-1"
-                    onClick={() => handlePageChange(page + 1)}
-                    disabled={page >= totalPages}
-                  >
-                    Next <CaretRight size={14} />
-                  </Button>
-                </div>
-              </div>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        {canCreateOrder && (
+          <Button onClick={() => setCreateOpen(true)} className="w-full sm:w-auto shrink-0 gap-2 shadow-sm shadow-primary/20 sm:hidden">
+            <Plus size={15} weight="bold" /> New Order
+          </Button>
+        )}
+      </div>
+
+      {/* Orders table */}
+      <div className="glass-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="table-header-row">
+              <TableHead className="font-semibold text-xs">Order ID</TableHead>
+              <TableHead className="font-semibold text-xs">Customer</TableHead>
+              <TableHead className="font-semibold text-xs">Sales rep</TableHead>
+              <TableHead className="font-semibold text-xs">Date</TableHead>
+              <TableHead className="font-semibold text-xs">Items</TableHead>
+              <TableHead className="font-semibold text-xs">Status</TableHead>
+              <TableHead className="font-semibold text-xs text-right">Total</TableHead>
+              <TableHead className="font-semibold text-xs text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredOrders.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8} className="py-20 text-center text-muted-foreground">
+                  <ShoppingCart size={36} className="mx-auto mb-3 opacity-20" />
+                  <p className="font-medium">
+                    {allOrders.length === 0 ? "No orders yet" : `No orders in "${ORDER_TABS.find((t) => t.id === resolvedTab)?.label}"`}
+                  </p>
+                  <p className="text-sm mt-1">
+                    {allOrders.length === 0
+                      ? "Create your first order to get started"
+                      : "Try another tab or clear filters"}
+                  </p>
+                  {canCreateOrder && allOrders.length === 0 && (
+                    <Button className="mt-4 gap-2" onClick={() => setCreateOpen(true)}>
+                      <Plus size={15} weight="bold" /> New Order
+                    </Button>
+                  )}
+                  {allOrders.length > 0 && resolvedTab !== "all" && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="mt-2"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        pickTab("all")
+                      }}
+                    >
+                      View all orders
+                    </Button>
+                  )}
+                </TableCell>
+              </TableRow>
             )}
-          </div>
-        </>
+            {filteredOrders.map((order) => {
+              const cust = allCustomers.find((c) => c.id === order.customerId)
+              const ui = ORDER_STATUS_DISPLAY[order.status] ?? { label: order.status, color: "bg-muted text-muted-foreground" }
+              const total = order.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0)
+              
+              // Extract unique images to display in the avatar stack
+              const images = order.lines.map(l => l.imageUrl).filter(Boolean) as string[]
+              const uniqueImages = Array.from(new Set(images))
+
+              return (
+                <TableRow
+                  key={order.id}
+                  className="cursor-pointer hover:bg-muted/30 transition-colors"
+                  onClick={() => router.push(`/orders/${order.id}`)}
+                >
+                  <TableCell className="font-mono text-xs font-semibold text-primary">{order.id}</TableCell>
+                  <TableCell className="font-medium text-[13px]">{cust?.name ?? "—"}</TableCell>
+                  <TableCell className="text-[12px]">
+                    <div className="font-medium text-foreground">{order.salesPersonName ?? "—"}</div>
+                    {order.salesPersonId && (
+                      <div className="text-[10px] font-mono text-muted-foreground">{order.salesPersonId}</div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-[12px] text-muted-foreground">
+                    <div>{formatDate(order.createdAt)}</div>
+                    {order.updatedAt !== order.createdAt && (
+                      <div className="text-[10px] text-muted-foreground/70">Updated {formatDate(order.updatedAt)}</div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center group relative h-8 w-16 z-0 hover:z-50 cursor-pointer">
+                      {uniqueImages.slice(0, 5).map((img, idx) => (
+                        <div 
+                          key={idx} 
+                          className={cn(
+                            "absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-background bg-muted overflow-hidden transition-all duration-300 ease-out shadow-sm",
+                            "translate-x-(--stack-x) group-hover:translate-x-(--hover-x)"
+                          )}
+                          style={{
+                            zIndex: 50 - idx,
+                            "--stack-x": `${idx * 5}px`,
+                            "--hover-x": `${idx * 24}px`,
+                          } as React.CSSProperties}
+                        >
+                          <img src={img} alt="Product" className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                      {uniqueImages.length > 5 && (
+                        <div 
+                          className={cn(
+                            "absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold transition-all duration-300 ease-out shadow-sm",
+                            "translate-x-(--stack-x) group-hover:translate-x-(--hover-x)"
+                          )}
+                          style={{
+                            zIndex: 40,
+                            "--stack-x": `${5 * 5}px`,
+                            "--hover-x": `${5 * 24}px`,
+                          } as React.CSSProperties}
+                        >
+                          +{uniqueImages.length - 5}
+                        </div>
+                      )}
+                      {uniqueImages.length === 0 && (
+                        <span className="text-xs text-muted-foreground/50 italic px-2">No images</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className={`badge-status ${ui.color}`}>{ui.label}</span>
+                  </TableCell>
+                  <TableCell className="font-bold text-[13px] text-right">{formatINR(total)}</TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-end gap-1">
+                      {canDownloadInvoice &&
+                        INVOICE_ELIGIBLE_STATUSES.includes(
+                          order.status as (typeof INVOICE_ELIGIBLE_STATUSES)[number]
+                        ) && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1 text-muted-foreground hover:text-foreground"
+                            disabled={downloadingInvoiceId === order.id}
+                            onClick={() => handleDownloadInvoice(order.id)}
+                            title="Download invoice"
+                          >
+                            {downloadingInvoiceId === order.id ? (
+                              <Spinner size={14} className="animate-spin" />
+                            ) : (
+                              <FileArrowDown size={14} />
+                            )}
+                            Invoice
+                          </Button>
+                        )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1 text-muted-foreground hover:text-foreground"
+                        onClick={() => router.push(`/orders/${order.id}`)}
+                      >
+                        {order.status === "NEEDS_RESTOCK" && isInventory ? "Restock" : "Manage"}
+                        <CaretRight weight="bold" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
+      </>
       )}
 
       {/* ── Create Order Dialog ─────────────────────────────────────────────── */}

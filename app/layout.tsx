@@ -9,6 +9,11 @@ const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'})
 
 export const metadata = {
   title: "ShirtCo ERP",
+  icons: {
+    icon: "/logo.jpg",
+    shortcut: "/logo.jpg",
+    apple: "/logo.jpg",
+  },
   description: "Manufacturing ERP for shirt production — Sales, Inventory, BOM, Production, MES, Shipments",
 }
 
