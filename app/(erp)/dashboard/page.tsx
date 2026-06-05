@@ -1,20 +1,17 @@
 "use client"
 
-import { useMemo } from "react"
 import { useFetch } from "@/hooks/use-api"
 import type { Customer, Product, SalesOrder } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ShoppingCart, Package, Users, Warning, CheckCircle, ArrowRight, TrendUp } from "@phosphor-icons/react"
+import { ShoppingCart, Users, Warning, CheckCircle, ArrowRight, TrendUp } from "@phosphor-icons/react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 
 import {
   Bar, BarChart, CartesianGrid, XAxis, YAxis,
-  PieChart, Pie, Cell,
-  RadialBarChart, RadialBar, PolarGrid,
 } from "recharts"
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from "@/components/ui/chart"
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v)
@@ -60,16 +57,6 @@ const ORDER_STATUS_CHART: Record<string, { label: string; color: string }> = {
   CANCELLED: { label: "Cancelled", color: "var(--destructive)" },
 }
 
-const statusChartConfig = Object.fromEntries(
-  Object.entries(ORDER_STATUS_CHART).map(([key, { label, color }]) => [key, { label, color }])
-) satisfies ChartConfig
-
-const stockConfig = {
-  high: { label: "Healthy Stock", color: "var(--chart-2)" },
-  low: { label: "Low Stock", color: "var(--chart-3)" },
-  out: { label: "Out of Stock", color: "var(--destructive)" },
-} satisfies ChartConfig
-
 export default function DashboardPage() {
   const { data: ordersRes, loading: lo } = useFetch<{ data: SalesOrder[] }>("/api/sales-orders")
   const { data: productsRes } = useFetch<{ data: Product[] }>("/api/products")
@@ -92,7 +79,7 @@ export default function DashboardPage() {
   const recentOrders = [...sos].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 6)
 
   // Chart 1: Procedural Revenue Trend (Last 7 Days)
-  const trendData = useMemo(() => {
+  const trendData = (() => {
     const data = []
     const base = revenue > 0 ? revenue / 7 : 50000
     const now = new Date()
@@ -107,14 +94,14 @@ export default function DashboardPage() {
       })
     }
     return data
-  }, [revenue])
+  })()
 
   const trendConfig = {
     revenue: { label: "Revenue", color: "var(--primary)" }
   } satisfies ChartConfig
 
   // Chart 2: Order Status Distribution
-  const statusData = useMemo(() => {
+  const statusData = (() => {
     const counts: Record<string, number> = {}
     sos.forEach((so) => {
       counts[so.status] = (counts[so.status] || 0) + 1
@@ -134,28 +121,20 @@ export default function DashboardPage() {
         fill: meta?.color ?? palette[index % palette.length],
       }
     })
-  }, [sos])
-
-  // Chart 3: Stock radial bars (healthy / low / out)
-  const stockRadialData = useMemo(() => {
-    return [
-      { stockKey: "high", category: "Healthy Stock", count: inStockProds.length },
-      { stockKey: "low", category: "Low Stock", count: lowStockProds.length },
-      { stockKey: "out", category: "Out of Stock", count: outOfStockProds.length },
-    ]
-      .filter((d) => d.count > 0)
-      .map((d) => ({
-        ...d,
-        fill: `var(--color-${d.stockKey})`,
-      }))
-  }, [inStockProds, lowStockProds, outOfStockProds])
+  })()
 
   const stockHealthPct = prods.length > 0
     ? Math.round((inStockProds.length / prods.length) * 100)
     : 0
 
+  const stockRows = [
+    { label: "Healthy stock", count: inStockProds.length, color: "var(--chart-2)", tone: "text-emerald-500" },
+    { label: "Low stock", count: lowStockProds.length, color: "var(--chart-3)", tone: "text-amber-500" },
+    { label: "Out of stock", count: outOfStockProds.length, color: "var(--destructive)", tone: "text-destructive" },
+  ]
+
   // Chart 4: Top 5 Products by Revenue
-  const topProductsData = useMemo(() => {
+  const topProductsData = (() => {
     const prodRev: Record<string, number> = {}
     sos.forEach(so => {
       if (so.status === "DELIVERED") {
@@ -174,7 +153,10 @@ export default function DashboardPage() {
         revenue: rev,
         fill: `var(--chart-${(i % 5) + 1})`
       }))
-  }, [sos, prods])
+  })()
+
+  const statusTotal = statusData.reduce((sum, item) => sum + item.count, 0)
+  const topProductTotal = topProductsData.reduce((sum, item) => sum + item.revenue, 0)
 
   return (
     <div className="flex-1 space-y-6 px-10 p-6 max-w-[1600px] mx-auto">
@@ -368,138 +350,133 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* ── Bottom Section (Pie Charts) ──────────────────────── */}
+      {/* ── Bottom Section ──────────────────────── */}
       <div className="grid gap-6 md:grid-cols-3">
 
-        {/* Order Status Donut (1 col) */}
-        <Card className="col-span-1 shadow-sm flex flex-col">
-          <CardHeader className="items-center pb-2">
-            <CardTitle>Order Statuses</CardTitle>
-            <CardDescription>Distribution of all orders</CardDescription>
+        {/* Order Status Progress */}
+        <Card className="col-span-1 flex flex-col overflow-hidden border-border/70 bg-card shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Order Pipeline</CardTitle>
+            <CardDescription>Status mix as progress rows</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 pb-0">
-            <ChartContainer config={statusChartConfig} className="mx-auto aspect-square max-h-[220px] w-full">
-              <PieChart>
-                <ChartTooltip
-                  cursor={false}
-                  content={
-                    <ChartTooltipContent
-                      hideLabel
-                      nameKey="status"
-                      formatter={(value, name) => {
-                        const label = ORDER_STATUS_CHART[String(name)]?.label ?? String(name)
-                        return (
-                          <span className="font-mono font-medium">
-                            {label}: {value}
-                          </span>
-                        )
-                      }}
-                    />
-                  }
-                />
-                <Pie
-                  data={statusData}
-                  dataKey="count"
-                  nameKey="status"
-                  innerRadius={45}
-                  outerRadius={65}
-                  strokeWidth={2}
-                  stroke="var(--background)"
-                  paddingAngle={2}
-                >
-                  {statusData.map((entry) => (
-                    <Cell key={entry.status} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <ChartLegend content={<ChartLegendContent nameKey="status" />} />
-              </PieChart>
-            </ChartContainer>
+          <CardContent className="flex-1 pb-4">
+            {statusData.length > 0 ? (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+                  <p className="text-xs font-medium text-muted-foreground">Total active records</p>
+                  <p className="mt-1 font-mono text-3xl font-bold tabular-nums">{statusTotal}</p>
+                </div>
+                <div className="space-y-3">
+                  {statusData.slice(0, 5).map((item) => {
+                    const label = ORDER_STATUS_CHART[item.status]?.label ?? item.status.replace(/_/g, " ")
+                    const pct = statusTotal > 0 ? Math.round((item.count / statusTotal) * 100) : 0
+                    return (
+                      <div key={item.status} className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+                          <span className="font-mono text-muted-foreground tabular-nums">{item.count}</span>
+                          <span className="w-9 text-right font-mono font-semibold tabular-nums">{pct}%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${pct}%`, backgroundColor: item.fill }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="flex min-h-[250px] items-center justify-center text-sm text-muted-foreground">
+                No order data yet
+              </div>
+            )}
           </CardContent>
-          <CardFooter className="flex-col gap-2 text-sm mt-4">
-            <div className="leading-none text-muted-foreground text-center">
-              A total of {sos.length} orders processed.
-            </div>
-          </CardFooter>
         </Card>
 
-        {/* Top Products Pie (1 col) */}
-        <Card className="col-span-1 shadow-sm flex flex-col">
-          <CardHeader className="items-center pb-2">
-            <CardTitle>Top Revenue Drivers</CardTitle>
-            <CardDescription>Best selling products</CardDescription>
+        {/* Top Products Bars */}
+        <Card className="col-span-1 flex flex-col overflow-hidden border-border/70 bg-card shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Revenue Drivers</CardTitle>
+            <CardDescription>Delivered revenue contribution</CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 pb-0">
+          <CardContent className="flex-1 pb-4">
             {topProductsData.length > 0 ? (
-              <ChartContainer config={{}} className="mx-auto aspect-square max-h-[200px] w-full">
-                <PieChart>
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent formatter={(val) => formatINR(Number(val))} />} />
-                  <Pie
-                    data={topProductsData}
-                    dataKey="revenue"
-                    nameKey="name"
-                    innerRadius={0}
-                    outerRadius={65}
-                    strokeWidth={2}
-                  />
-                  <ChartLegend content={<ChartLegendContent />} />
-                </PieChart>
-              </ChartContainer>
+              <div className="space-y-4">
+                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+                  <p className="text-xs font-medium text-muted-foreground">Top product revenue</p>
+                  <p className="mt-1 font-mono text-2xl font-bold tabular-nums">{formatINR(topProductTotal)}</p>
+                </div>
+                <div className="space-y-3">
+                  {topProductsData.map((item) => {
+                    const pct = topProductTotal > 0 ? Math.round((item.revenue / topProductTotal) * 100) : 0
+                    return (
+                      <div key={item.name} className="space-y-1.5">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="min-w-0 flex-1 truncate font-medium">{item.name}</span>
+                          <span className="font-mono text-muted-foreground tabular-nums">{formatINR(item.revenue)}</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${pct}%`, backgroundColor: item.fill }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             ) : (
-              <div className="h-full flex items-center justify-center text-sm text-muted-foreground min-h-[250px]">
+              <div className="flex min-h-[250px] items-center justify-center text-sm text-muted-foreground">
                 No revenue data yet
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Inventory stock radial chart (1 col) */}
-        <Card className="col-span-1 shadow-sm flex flex-col">
-          <CardHeader className="items-center pb-2">
-            <CardTitle>Inventory Health</CardTitle>
-            <CardDescription>Stock levels by product count</CardDescription>
+        {/* Inventory Health Actions */}
+        <Card className="col-span-1 flex flex-col overflow-hidden border-border/70 bg-card shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Inventory Health</CardTitle>
+            <CardDescription>Stock levels and action priority</CardDescription>
           </CardHeader>
-          <CardContent className="relative flex-1 pb-0">
-            {stockRadialData.length > 0 ? (
-              <>
-                <ChartContainer config={stockConfig} className="mx-auto aspect-square max-h-[220px] w-full">
-                  <RadialBarChart
-                    data={stockRadialData}
-                    innerRadius="28%"
-                    outerRadius="95%"
-                    startAngle={90}
-                    endAngle={-270}
-                    barSize={14}
-                  >
-                    <PolarGrid gridType="circle" radialLines={false} stroke="none" className="stroke-none" />
-                    <ChartTooltip
-                      cursor={false}
-                      content={
-                        <ChartTooltipContent
-                          hideLabel
-                          nameKey="category"
-                          formatter={(value) => (
-                            <span className="font-mono font-medium">
-                              {value} product{Number(value) === 1 ? "" : "s"}
-                            </span>
-                          )}
-                        />
-                      }
-                    />
-                    <RadialBar
-                      dataKey="count"
-                      background={{ fill: "var(--muted)", opacity: 0.35 }}
-                      cornerRadius={6}
-                    />
-                    <ChartLegend content={<ChartLegendContent nameKey="stockKey" />} />
-                  </RadialBarChart>
-                </ChartContainer>
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <p className="text-3xl font-bold font-mono tabular-nums leading-none">{stockHealthPct}%</p>
-                    <p className="text-[11px] text-muted-foreground mt-1 uppercase tracking-wide">Healthy</p>
+          <CardContent className="flex-1 pb-4">
+            {prods.length > 0 ? (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3">
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Healthy stock rate</p>
+                      <p className="mt-1 font-mono text-3xl font-bold tabular-nums">{stockHealthPct}%</p>
+                    </div>
+                    <Link href="/products" className="text-xs font-medium text-primary hover:underline">
+                      Review
+                    </Link>
                   </div>
                 </div>
-              </>
+                <div className="space-y-3">
+                  {stockRows.map((item) => {
+                    const pct = prods.length > 0 ? Math.round((item.count / prods.length) * 100) : 0
+                    return (
+                      <div key={item.label} className="rounded-lg border border-border/50 bg-background/40 px-3 py-2.5">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={cn("min-w-0 flex-1 font-medium", item.tone)}>{item.label}</span>
+                          <span className="font-mono font-semibold tabular-nums">{item.count}</span>
+                        </div>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${pct}%`, backgroundColor: item.color }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             ) : (
               <div className="flex min-h-[220px] items-center justify-center text-sm text-muted-foreground">
                 No product stock data

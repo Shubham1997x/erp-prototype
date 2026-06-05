@@ -35,7 +35,7 @@ export function EditOrderDialog({
 
   useEffect(() => {
     if (open && order) {
-      setEditCustomerId(order.customer_id)
+      setEditCustomerId(order.customerId)
       setEditLines(order.lines.map((l) => ({ ...l })))
       setEditNotes(order.notes || "")
       setEditChangeSummary("")

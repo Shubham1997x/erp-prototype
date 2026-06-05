@@ -11,8 +11,7 @@ import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel,
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuBadge, useSidebar,
 } from "@/components/ui/sidebar"
-import { Badge } from "@/components/ui/badge"
-import { getAvatarUrl } from "@/lib/utils"
+import { getAvatarUrl } from "@/lib/avatar-utils"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
@@ -111,14 +110,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }
 
   return (
-    <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader className="flex flex-row items-center gap-3 border-b border-sidebar-border/50 px-3 pb-3 pt-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
-        <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded-full border border-sidebar-border/40 bg-black text-primary-foreground shadow shadow-primary/30 group-data-[collapsible=icon]:size-9">
+    <Sidebar collapsible="icon" className="border-sidebar-border/70 shadow-xl shadow-black/20" {...props}>
+      <SidebarHeader className="flex flex-row items-center gap-3 border-b border-sidebar-border/70 px-3 pb-3 pt-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2">
+        <div className="flex aspect-square size-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black text-primary-foreground shadow-lg shadow-black/40 group-data-[collapsible=icon]:size-9">
           <img src="/logo.jpg" className="size-full object-cover rounded-full" alt="ShirtCo" />
         </div>
         <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
           <span className="truncate font-heading text-base font-bold">ShirtCo ERP</span>
-          <span className="truncate text-xs text-sidebar-foreground/70">Shirt Manufacturing</span>
+          <span className="truncate text-xs text-sidebar-foreground/60">Shirt Manufacturing</span>
         </div>
       </SidebarHeader>
 
@@ -141,9 +140,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
         {/* Restock alert in expanded mode */}
         {restockCount > 0 && (!currentUser || currentUser.role === "Admin" || currentUser.role === "Inventory Manager") && (
-          <div className="mx-2 mb-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 flex items-start gap-2 group-data-[collapsible=icon]:hidden">
-            <Warning size={13} className="text-amber-500 mt-0.5 shrink-0" weight="fill" />
-            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium leading-tight">
+          <div className="mx-2 mb-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-3 py-2 flex items-start gap-2 group-data-[collapsible=icon]:hidden">
+            <Warning size={13} className="text-amber-300 mt-0.5 shrink-0" weight="fill" />
+            <p className="text-[11px] text-amber-100 font-medium leading-tight">
               {restockCount} order{restockCount > 1 ? "s" : ""} need restocking
             </p>
           </div>
@@ -161,7 +160,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border/50 group-data-[collapsible=icon]:p-1">
+      <SidebarFooter className="border-t border-sidebar-border/70 bg-black/10 group-data-[collapsible=icon]:p-1">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -175,7 +174,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     {currentUser && (
                       <AvatarImage src={getAvatarUrl(currentUser.id)} className="object-cover" />
                     )}
-                    <AvatarFallback className="rounded-full bg-linear-to-br from-primary to-violet-600 text-white font-bold text-[11px] shadow shadow-primary/30">
+                    <AvatarFallback className="rounded-full bg-sidebar-primary text-sidebar-primary-foreground font-bold text-[11px] shadow shadow-black/30">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
@@ -198,7 +197,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       {currentUser && (
                         <AvatarImage src={getAvatarUrl(currentUser.id)} className="object-cover" />
                       )}
-                      <AvatarFallback className="rounded-full bg-linear-to-br from-primary to-violet-600 text-white font-bold text-xs">
+                      <AvatarFallback className="rounded-full bg-sidebar-primary text-sidebar-primary-foreground font-bold text-xs">
                         {initials}
                       </AvatarFallback>
                     </Avatar>
@@ -267,7 +266,7 @@ function NavItem({
         tooltip={item.name}
         isActive={active}
         className={cn(
-          "h-10 text-sm [&_svg]:size-5",
+          "h-10 text-sm text-sidebar-foreground/80 hover:text-sidebar-accent-foreground data-active:bg-sidebar-primary/18 data-active:text-white data-active:shadow-sm data-active:shadow-black/20 [&_svg]:size-5",
           navBtnCollapsed
         )}
       >

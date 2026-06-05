@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, PencilSimple, Trash, Users, Envelope, Phone, MapPin, Spinner, Buildings, Lock } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { useUser } from "@/hooks/use-user"
-import { getCompanyImageUrl } from "@/lib/utils"
+import { getCompanyImageUrl } from "@/lib/avatar-utils"
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v)

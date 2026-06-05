@@ -42,7 +42,7 @@ export default function LoginPage() {
     await doLogin(email, password)
   }
 
-  async function quickLogin(acc: typeof DEMO_ACCOUNTS[0]) {
+  async function quickLogin(acc: (typeof DEMO_ACCOUNTS)[number]) {
     setEmail(acc.email)
     setPassword(DEMO_PASSWORD)
     await doLogin(acc.email, DEMO_PASSWORD)

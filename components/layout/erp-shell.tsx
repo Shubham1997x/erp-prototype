@@ -18,7 +18,7 @@ import { UserProvider, useUser } from "@/components/providers/user-provider"
 import { NotificationProvider } from "@/components/providers/notification-provider"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { getAvatarUrl } from "@/lib/utils"
+import { getAvatarUrl } from "@/lib/avatar-utils"
 
 function userInitials(name: string | undefined): string {
   if (!name?.trim()) return "?"
