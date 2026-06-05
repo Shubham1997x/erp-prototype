@@ -91,6 +91,7 @@ function initSchema(db: Database.Database) {
 
     CREATE TABLE IF NOT EXISTS sales_orders (
       id TEXT PRIMARY KEY,
+      order_number TEXT,
       customer_id TEXT NOT NULL,
       status TEXT DEFAULT 'DRAFT',
       notes TEXT,
@@ -678,6 +679,22 @@ function runMigrations(db: Database.Database) {
       upd.run(u.id, u.name)
     }
     db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (8)").run()
+  }
+
+  // v9: order_number
+  if (!ran.has(9)) {
+    addCol(db, "sales_orders", "order_number", "TEXT")
+    
+    // Backfill order numbers
+    const orders = db.prepare("SELECT id, created_at FROM sales_orders ORDER BY created_at ASC").all() as { id: string, created_at: string }[]
+    const stmt = db.prepare("UPDATE sales_orders SET order_number = ? WHERE id = ?")
+    let num = 1000
+    for (const o of orders) {
+      num++
+      stmt.run(`#${num}`, o.id)
+    }
+
+    db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (9)").run()
   }
 }
 

@@ -33,6 +33,10 @@ export default function ProductDetailPage() {
     price: 0,
     unitOfMeasure: "pcs",
     imageUrl: "",
+    category: "",
+    standardCost: 0,
+    unitCost: 0,
+    isActive: true,
   })
   const [stockOpen, setStockOpen] = useState(false)
   const [stockQty, setStockQty] = useState(0)
@@ -48,6 +52,10 @@ export default function ProductDetailPage() {
       price: product.price,
       unitOfMeasure: product.unitOfMeasure ?? "pcs",
       imageUrl: product.imageUrl ?? "",
+      category: product.category ?? "",
+      standardCost: product.standardCost ?? 0,
+      unitCost: product.unitCost ?? 0,
+      isActive: product.isActive !== false,
     })
     setEditOpen(true)
   }
@@ -300,6 +308,47 @@ export default function ProductDetailPage() {
                   <option value="units">units</option>
                   <option value="sets">sets</option>
                   <option value="boxes">boxes</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Standard Cost (₹)</label>
+                <input
+                  type="number" min={0}
+                  value={editForm.standardCost || ""}
+                  onChange={(e) => setEditForm({ ...editForm, standardCost: parseFloat(e.target.value) || 0 })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Unit Cost (₹)</label>
+                <input
+                  type="number" min={0}
+                  value={editForm.unitCost || ""}
+                  onChange={(e) => setEditForm({ ...editForm, unitCost: parseFloat(e.target.value) || 0 })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Category</label>
+                <input
+                  value={editForm.category}
+                  onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</label>
+                <select
+                  value={editForm.isActive ? "true" : "false"}
+                  onChange={(e) => setEditForm({ ...editForm, isActive: e.target.value === "true" })}
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="true">Active</option>
+                  <option value="false">Inactive</option>
                 </select>
               </div>
             </div>

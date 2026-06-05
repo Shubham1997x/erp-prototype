@@ -11,13 +11,14 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { NotificationBell } from "@/components/layout/notification-bell"
 import { AuthGuard } from "@/components/layout/auth-guard"
 import { UserProvider, useUser } from "@/components/providers/user-provider"
 import { NotificationProvider } from "@/components/providers/notification-provider"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { getAvatarUrl } from "@/lib/utils"
 
 function userInitials(name: string | undefined): string {
   if (!name?.trim()) return "?"
@@ -46,17 +47,19 @@ function ERPHeader() {
       <div className="flex flex-1 items-center gap-2 px-4">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4" />
-        <Breadcrumb>
-          <BreadcrumbList>
-            <BreadcrumbItem className="hidden md:block">
-              <BreadcrumbLink href="/dashboard">Overview</BreadcrumbLink>
-            </BreadcrumbItem>
-            <BreadcrumbSeparator className="hidden md:block" />
-            <BreadcrumbItem>
-              <BreadcrumbPage>{currentPage}</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+        {pathname !== "/dashboard" && (
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem className="hidden md:block">
+                <BreadcrumbLink href="/dashboard">Overview</BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator className="hidden md:block" />
+              <BreadcrumbItem>
+                <BreadcrumbPage>{currentPage}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        )}
       </div>
 
       <div className="flex items-center gap-2 px-4">
@@ -67,6 +70,9 @@ function ERPHeader() {
           title={user ? `${user.name} · ${user.role}` : undefined}
         >
           <Avatar className="h-8 w-8 rounded-full border">
+            {user && (
+              <AvatarImage src={getAvatarUrl(user.id)} className="object-cover" />
+            )}
             <AvatarFallback className="rounded-full bg-primary/10 text-xs font-bold text-primary">
               {loading ? "…" : initials}
             </AvatarFallback>

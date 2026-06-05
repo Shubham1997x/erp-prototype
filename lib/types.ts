@@ -99,6 +99,7 @@ export interface SalesOrderLine {
 
 export interface SalesOrder {
   id: string
+  orderNumber?: string
   customerId: string
   status: SalesOrderStatus
   lines: SalesOrderLine[]

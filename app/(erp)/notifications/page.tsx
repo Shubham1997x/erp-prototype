@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { Check, Bell, ArrowRight } from "@phosphor-icons/react"
+import { Check, Bell, ArrowRight, Package, Warning, Info, CheckCircle } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -37,6 +37,30 @@ const GROUP_LABELS: Record<string, string> = {
   __other__: "General",
 }
 
+export interface GroupedNotification extends AppNotification {
+  count: number
+  ids: string[]
+}
+
+function deduplicate(items: AppNotification[]): GroupedNotification[] {
+  const map = new Map<string, GroupedNotification>()
+  for (const n of items) {
+    const key = `${n.type}-${n.entityId}-${n.title}`
+    if (map.has(key)) {
+      const existing = map.get(key)!
+      existing.count += 1
+      existing.ids.push(n.id)
+      // Keep the most recent timestamp
+      if (new Date(n.createdAt) > new Date(existing.createdAt)) {
+        existing.createdAt = n.createdAt
+      }
+    } else {
+      map.set(key, { ...n, count: 1, ids: [n.id] })
+    }
+  }
+  return Array.from(map.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+}
+
 function useGrouped(items: AppNotification[]) {
   return useMemo(() => {
     const map = new Map<string, AppNotification[]>()
@@ -46,14 +70,14 @@ function useGrouped(items: AppNotification[]) {
       map.get(k)!.push(n)
     }
     // Order groups
-    const ordered: { key: string; label: string; items: AppNotification[] }[] = []
+    const ordered: { key: string; label: string; items: GroupedNotification[] }[] = []
     for (const k of GROUP_ORDER) {
-      if (map.has(k)) ordered.push({ key: k, label: GROUP_LABELS[k], items: map.get(k)! })
+      if (map.has(k)) ordered.push({ key: k, label: GROUP_LABELS[k], items: deduplicate(map.get(k)!) })
     }
     // Any remaining keys not in GROUP_ORDER
     for (const [k, its] of map.entries()) {
       if (!ordered.find((g) => g.key === k)) {
-        ordered.push({ key: k, label: GROUP_LABELS[k] ?? k, items: its })
+        ordered.push({ key: k, label: GROUP_LABELS[k] ?? k, items: deduplicate(its) })
       }
     }
     return ordered
@@ -77,10 +101,10 @@ export default function NotificationsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {unread > 0 ? `${unread} unread` : "All caught up"}
+            {unreadItems.length > 0 ? `${unreadItems.length} unread` : "All caught up"}
           </p>
         </div>
-        {unread > 0 && (
+        {unreadItems.length > 0 && (
           <Button
             variant="outline"
             size="sm"
@@ -118,8 +142,8 @@ export default function NotificationsPage() {
           <section className="break-inside-avoid mb-6">
             <SectionHeading label="Unread" count={unreadItems.length} accent />
             <div className="mt-2 divide-y rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-sm overflow-hidden glass-card">
-              {unreadItems.map((n) => (
-                <NotifRow key={n.id} n={n} onMarkRead={() => void markRead(n.id)} />
+              {deduplicate(unreadItems).map((n) => (
+                <NotifRow key={n.ids.join(',')} n={n} onMarkRead={() => { n.ids.forEach(id => void markRead(id)) }} />
               ))}
             </div>
           </section>
@@ -134,7 +158,7 @@ export default function NotificationsPage() {
               <GroupLabel label={g.label} type={g.key} />
               <div className="mt-1.5 divide-y rounded-xl border border-border/60 bg-card/80 backdrop-blur-sm shadow-sm overflow-hidden glass-card">
                 {g.items.map((n) => (
-                  <NotifRow key={n.id} n={n} muted />
+                  <NotifRow key={n.ids.join(',')} n={n} muted />
                 ))}
               </div>
             </section>
@@ -196,7 +220,7 @@ function NotifRow({
   muted,
   onMarkRead,
 }: {
-  n: AppNotification
+  n: GroupedNotification
   muted?: boolean
   onMarkRead?: () => void
 }) {
@@ -213,18 +237,47 @@ function NotifRow({
         muted && "opacity-70"
       )}
     >
-      {/* type dot */}
-      <span className={cn("mt-1.5 size-2 shrink-0 rounded-full", meta.accent)} aria-hidden />
+      {/* type icon */}
+      <div className={cn("mt-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-opacity-20", meta.accent.replace('bg-', 'text-').replace('-500', '-600 dark:text-500'), meta.accent.replace('bg-', 'bg-').replace('-500', '-500/10'))}>
+        {n.type === "SO_NEEDS_RESTOCK" ? <Package size={14} weight="bold" /> :
+         n.type === "SO_RESTOCK_COMPLETE" ? <CheckCircle size={14} weight="bold" /> :
+         n.type === "LOW_STOCK" ? <Warning size={14} weight="bold" /> :
+         n.type === "SO_NUDGE_RESTOCK" ? <Bell size={14} weight="bold" /> :
+         <Info size={14} weight="bold" />}
+      </div>
 
       {/* body */}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[11px] font-semibold text-muted-foreground">{meta.label}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold text-muted-foreground">{meta.label}</span>
+            {n.count > 1 && (
+              <span className="rounded-full bg-muted/80 px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
+                ×{n.count}
+              </span>
+            )}
+          </div>
           <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
             {formatNotificationTime(n.createdAt)}
           </span>
         </div>
-        <p className="mt-0.5 text-sm font-medium leading-snug text-foreground">{summary}</p>
+        <p className="mt-0.5 text-sm font-medium leading-snug text-foreground">
+          {href && n.entityId ? (
+            <>
+              {summary.split(new RegExp(`(${n.entityId})`, 'i')).map((part, i) => 
+                part.toLowerCase() === n.entityId!.toLowerCase() ? (
+                  <Link key={i} href={href} className="text-primary hover:underline font-mono text-xs">
+                    {part}
+                  </Link>
+                ) : (
+                  <span key={i}>{part}</span>
+                )
+              )}
+            </>
+          ) : (
+            summary
+          )}
+        </p>
         {n.message && summary !== n.message && (
           <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{n.message}</p>
         )}
@@ -255,3 +308,4 @@ function NotifRow({
     </div>
   )
 }
+

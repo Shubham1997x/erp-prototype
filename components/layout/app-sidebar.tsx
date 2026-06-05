@@ -11,11 +11,13 @@ import {
   Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupLabel,
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuBadge, useSidebar,
 } from "@/components/ui/sidebar"
+import { Badge } from "@/components/ui/badge"
+import { getAvatarUrl } from "@/lib/utils"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { toast } from "sonner"
 import { useUser } from "@/hooks/use-user"
 import { useNotifications } from "@/components/providers/notification-provider"
@@ -116,7 +118,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </div>
         <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
           <span className="truncate font-heading text-base font-bold">ShirtCo ERP</span>
-          <span className="truncate text-xs text-muted-foreground">Shirt Manufacturing</span>
+          <span className="truncate text-xs text-sidebar-foreground/70">Shirt Manufacturing</span>
         </div>
       </SidebarHeader>
 
@@ -170,13 +172,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:size-10! group-data-[collapsible=icon]:h-10! group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-1!"
                 >
                   <Avatar className="h-8 w-8 shrink-0 rounded-full group-data-[collapsible=icon]:h-9 group-data-[collapsible=icon]:w-9">
+                    {currentUser && (
+                      <AvatarImage src={getAvatarUrl(currentUser.id)} className="object-cover" />
+                    )}
                     <AvatarFallback className="rounded-full bg-linear-to-br from-primary to-violet-600 text-white font-bold text-[11px] shadow shadow-primary/30">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid min-w-0 flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
                     <span className="truncate font-semibold">{currentUser?.name ?? "Guest"}</span>
-                    <span className="truncate text-[10px] text-muted-foreground">{currentUser?.role ?? "—"}</span>
+                    <span className="truncate text-[10px] text-sidebar-foreground/70">{currentUser?.role ?? "—"}</span>
                   </div>
                   <CaretUpDown className="ml-auto size-4 shrink-0 group-data-[collapsible=icon]:hidden" />
                 </SidebarMenuButton>
@@ -190,6 +195,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <DropdownMenuLabel className="p-0 font-normal">
                   <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm rounded-full">
                     <Avatar className="h-8 w-8 rounded-full">
+                      {currentUser && (
+                        <AvatarImage src={getAvatarUrl(currentUser.id)} className="object-cover" />
+                      )}
                       <AvatarFallback className="rounded-full bg-linear-to-br from-primary to-violet-600 text-white font-bold text-xs">
                         {initials}
                       </AvatarFallback>

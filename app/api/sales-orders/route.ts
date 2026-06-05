@@ -97,11 +97,14 @@ export async function POST(req: Request) {
   const status = creditCheckPassed ? "DRAFT" : "CREDIT_HOLD"
 
   db.transaction(() => {
+    const count = (db.prepare("SELECT COUNT(*) as c FROM sales_orders").get() as { c: number }).c
+    const orderNumber = `#${count + 1001}`
+
     db.prepare(`
       INSERT INTO sales_orders
-        (id, customer_id, status, notes, created_by, created_at, updated_at, requested_delivery_date, credit_check_passed)
-      VALUES (?,?,?,?,?,?,?,?,?)
-    `).run(id, body.customerId, status, body.notes ?? null, auth.id, now, now,
+        (id, order_number, customer_id, status, notes, created_by, created_at, updated_at, requested_delivery_date, credit_check_passed)
+      VALUES (?,?,?,?,?,?,?,?,?,?)
+    `).run(id, orderNumber, body.customerId, status, body.notes ?? null, auth.id, now, now,
            body.requestedDeliveryDate ?? null, creditCheckPassed ? 1 : 0)
 
     for (const line of body.lines) {

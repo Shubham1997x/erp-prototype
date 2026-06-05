@@ -383,15 +383,18 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             <ArrowLeft size={14} /> Orders
           </button>
           <CaretRight size={12} />
-          <span className="font-mono">{order.id}</span>
+          <span className="font-mono">{order.orderNumber || order.id}</span>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
           <div className="flex items-center gap-3 sm:gap-4">
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold font-mono break-all">{order.id}</h1>
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold font-mono break-all">{order.orderNumber || order.id}</h1>
             <span className={cn("px-2 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-semibold tracking-wide shrink-0", statusUi.color)}>
               {statusUi.label}
             </span>
+          </div>
+          <div className="text-sm text-muted-foreground font-mono truncate max-w-full -mt-2">
+            ID: {order.id}
           </div>
 
           <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2">
@@ -630,23 +633,38 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
           <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
             <Truck weight="bold" size={14} /> Logistics Details
           </h3>
-          {(order.tracking_number || order.carrier || order.status === "SHIPPED") ? (
-            <div className="space-y-3">
+          <div className="space-y-4">
+            {(order.tracking_number || order.carrier || order.status === "SHIPPED") ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[11px] text-muted-foreground mb-0.5">Carrier</div>
+                  <div className="text-sm font-medium">{order.carrier || "Not specified"}</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-muted-foreground mb-0.5">Tracking Number</div>
+                  <div className="text-sm font-mono font-bold text-foreground">{order.tracking_number || "Pending"}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg bg-muted/30 p-3 text-sm text-muted-foreground border border-border/50 flex items-center gap-3">
+                <div className="bg-background rounded-full p-1.5 shadow-sm border"><Package size={16} /></div>
+                <div>
+                  <div className="font-semibold text-foreground">Pending Shipping</div>
+                  <div className="text-xs">Order has not been dispatched yet.</div>
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3 border-t border-border/50 pt-3">
               <div>
-                <div className="text-[11px] text-muted-foreground mb-0.5">Carrier</div>
-                <div className="text-sm font-medium">{order.carrier || "Not specified"}</div>
+                <div className="text-[11px] text-muted-foreground mb-0.5">Requested Date</div>
+                <div className="text-sm font-medium">{formatDate(order.requestedDeliveryDate)}</div>
               </div>
               <div>
-                <div className="text-[11px] text-muted-foreground mb-0.5">Tracking Number</div>
-                <div className="text-sm font-mono font-bold text-foreground">{order.tracking_number || "Pending"}</div>
+                <div className="text-[11px] text-muted-foreground mb-0.5">Estimated Ship Date</div>
+                <div className="text-sm font-medium">{order.promisedDeliveryDate ? formatDate(order.promisedDeliveryDate) : "—"}</div>
               </div>
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-[100px] text-sm text-muted-foreground">
-              <div className="opacity-40 mb-2"><Package size={24} /></div>
-              <span>Pending shipping</span>
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Order Metadata */}

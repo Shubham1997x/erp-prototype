@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useMemo } from "react"
 import { useFetch } from "@/hooks/use-api"
 import type { Customer, Product, SalesOrder } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
@@ -43,21 +43,21 @@ const STATUS_COLORS: Record<string, string> = {
 
 /** Distinct color per order status for charts (avoids grey fallback for unknown keys). */
 const ORDER_STATUS_CHART: Record<string, { label: string; color: string }> = {
-  DELIVERED: { label: "Delivered", color: "#10b981" }, // emerald-500
-  PAID: { label: "Paid", color: "#34d399" }, // emerald-400
-  INVOICED: { label: "Invoiced", color: "#6366f1" }, // indigo-500
-  SHIPPED: { label: "Shipped", color: "#0ea5e9" }, // sky-500
-  READY_TO_SHIP: { label: "Ready to ship", color: "#14b8a6" }, // teal-500
-  APPROVED: { label: "Approved", color: "#10b981" }, // emerald-500
-  IN_PRODUCTION: { label: "In production", color: "#8b5cf6" }, // violet-500
-  PARTIALLY_FULFILLED: { label: "Partial", color: "#f59e0b" }, // amber-500
-  NEEDS_RESTOCK: { label: "Needs restock", color: "#f97316" }, // orange-500
-  INVENTORY_CHECK: { label: "Stock check", color: "#eab308" }, // yellow-500
-  SUBMITTED: { label: "Submitted", color: "#3b82f6" }, // blue-500
-  DRAFT: { label: "Draft", color: "#94a3b8" }, // slate-400
-  CREDIT_HOLD: { label: "Credit hold", color: "#ef4444" }, // red-500
-  DISPUTED: { label: "Disputed", color: "#f43f5e" }, // rose-500
-  CANCELLED: { label: "Cancelled", color: "#ef4444" }, // red-500
+  DELIVERED: { label: "Delivered", color: "var(--chart-1)" },
+  PAID: { label: "Paid", color: "oklch(0.55 0.16 145)" },
+  INVOICED: { label: "Invoiced", color: "oklch(0.6 0.14 165)" },
+  SHIPPED: { label: "Shipped", color: "oklch(0.62 0.14 240)" },
+  READY_TO_SHIP: { label: "Ready to ship", color: "oklch(0.68 0.12 185)" },
+  APPROVED: { label: "Approved", color: "var(--chart-2)" },
+  IN_PRODUCTION: { label: "In production", color: "oklch(0.58 0.2 305)" },
+  PARTIALLY_FULFILLED: { label: "Partial", color: "oklch(0.62 0.18 320)" },
+  NEEDS_RESTOCK: { label: "Needs restock", color: "oklch(0.72 0.16 75)" },
+  INVENTORY_CHECK: { label: "Stock check", color: "oklch(0.65 0.12 255)" },
+  SUBMITTED: { label: "Submitted", color: "var(--chart-4)" },
+  DRAFT: { label: "Draft", color: "oklch(0.78 0.01 286)" },
+  CREDIT_HOLD: { label: "Credit hold", color: "oklch(0.7 0.18 55)" },
+  DISPUTED: { label: "Disputed", color: "oklch(0.65 0.2 45)" },
+  CANCELLED: { label: "Cancelled", color: "var(--destructive)" },
 }
 
 const statusChartConfig = Object.fromEntries(
@@ -65,9 +65,9 @@ const statusChartConfig = Object.fromEntries(
 ) satisfies ChartConfig
 
 const stockConfig = {
-  high: { label: "Healthy Stock", color: "#10b981" }, // emerald-500
-  low: { label: "Low Stock", color: "#f59e0b" }, // amber-500
-  out: { label: "Out of Stock", color: "#ef4444" }, // red-500
+  high: { label: "Healthy Stock", color: "var(--chart-2)" },
+  low: { label: "Low Stock", color: "var(--chart-3)" },
+  out: { label: "Out of Stock", color: "var(--destructive)" },
 } satisfies ChartConfig
 
 export default function DashboardPage() {
@@ -92,11 +92,7 @@ export default function DashboardPage() {
   const recentOrders = [...sos].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 6)
 
   // Chart 1: Procedural Revenue Trend (Last 7 Days)
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
-
   const trendData = useMemo(() => {
-    if (!mounted) return []
     const data = []
     const base = revenue > 0 ? revenue / 7 : 50000
     const now = new Date()
@@ -111,7 +107,7 @@ export default function DashboardPage() {
       })
     }
     return data
-  }, [revenue, mounted])
+  }, [revenue])
 
   const trendConfig = {
     revenue: { label: "Revenue", color: "var(--primary)" }
@@ -181,7 +177,7 @@ export default function DashboardPage() {
   }, [sos, prods])
 
   return (
-    <div className="flex-1 space-y-6 p-4 sm:p-6 lg:px-10 max-w-[1600px] mx-auto">
+    <div className="flex-1 space-y-6 px-10 p-6 max-w-[1600px] mx-auto">
       <title>Dashboard | ShirtCo ERP</title>
       {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -213,7 +209,7 @@ export default function DashboardPage() {
                 <div className={cn("text-2xl font-bold font-mono", needsRestock.length > 0 && "text-amber-500")}>
                   {needsRestock.length}
                 </div>
-                <Link href="/orders#needs_restock" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 mt-1">
+                <Link href="/orders" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 mt-1">
                   View blocked <ArrowRight size={10} />
                 </Link>
               </>
@@ -222,7 +218,7 @@ export default function DashboardPage() {
         </Card>
 
         <Card className="bg-card shadow-sm relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-linear-to-br from-emerald-500/5 to-transparent pointer-events-none" />
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
             <CheckCircle className="h-4 w-4 text-emerald-500" />
@@ -466,7 +462,15 @@ export default function DashboardPage() {
             {stockRadialData.length > 0 ? (
               <>
                 <ChartContainer config={stockConfig} className="mx-auto aspect-square max-h-[220px] w-full">
-                  <PieChart>
+                  <RadialBarChart
+                    data={stockRadialData}
+                    innerRadius="28%"
+                    outerRadius="95%"
+                    startAngle={90}
+                    endAngle={-270}
+                    barSize={14}
+                  >
+                    <PolarGrid gridType="circle" radialLines={false} stroke="none" className="stroke-none" />
                     <ChartTooltip
                       cursor={false}
                       content={
@@ -481,22 +485,13 @@ export default function DashboardPage() {
                         />
                       }
                     />
-                    <Pie
-                      data={stockRadialData}
+                    <RadialBar
                       dataKey="count"
-                      nameKey="category"
-                      innerRadius={45}
-                      outerRadius={65}
-                      strokeWidth={2}
-                      stroke="var(--background)"
-                      paddingAngle={2}
-                    >
-                      {stockRadialData.map((entry) => (
-                        <Cell key={entry.stockKey} fill={entry.fill} />
-                      ))}
-                    </Pie>
+                      background={{ fill: "var(--muted)", opacity: 0.35 }}
+                      cornerRadius={6}
+                    />
                     <ChartLegend content={<ChartLegendContent nameKey="stockKey" />} />
-                  </PieChart>
+                  </RadialBarChart>
                 </ChartContainer>
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div className="text-center">

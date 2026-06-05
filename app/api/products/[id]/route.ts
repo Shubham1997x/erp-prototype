@@ -74,11 +74,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const price = body.price !== undefined ? Number(body.price) : before.price
   const imageUrl = body.imageUrl !== undefined ? body.imageUrl : before.image_url
 
+  const category = body.category !== undefined ? (body.category || null) : before.category
+  const standardCost = body.standardCost !== undefined ? (Number(body.standardCost) || null) : before.standard_cost
+  const unitCost = body.unitCost !== undefined ? (Number(body.unitCost) || null) : before.unit_cost
+  const isActive = body.isActive !== undefined ? (body.isActive ? 1 : 0) : before.is_active
+
   db.prepare(`
     UPDATE products
-    SET name = ?, sku = ?, unit_of_measure = ?, price = ?, image_url = ?
+    SET name = ?, sku = ?, unit_of_measure = ?, price = ?, image_url = ?, category = ?, standard_cost = ?, unit_cost = ?, is_active = ?
     WHERE id = ?
-  `).run(name, sku, unitOfMeasure, price, imageUrl, id)
+  `).run(name, sku, unitOfMeasure, price, imageUrl, category, standardCost, unitCost, isActive, id)
 
   const after = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as Record<string, unknown>
 

@@ -1,15 +1,15 @@
 "use client"
 
+import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CheckCircleIcon, InfoIcon, WarningIcon, XCircleIcon, SpinnerIcon } from "@phosphor-icons/react"
 
 const Toaster = ({ ...props }: ToasterProps) => {
+  const { theme = "system" } = useTheme()
+
   return (
     <Sonner
-      theme={"light"}
-      position="bottom-right"
-      visibleToasts={3}
-      closeButton
+      theme={theme as ToasterProps["theme"]}
       className="toaster group"
       icons={{
         success: (

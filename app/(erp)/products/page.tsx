@@ -12,6 +12,7 @@ import { Plus, Package, Warning, CheckCircle, Spinner, ArrowUp, Eye, PencilSimpl
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { notifyNotificationsChanged } from "@/components/providers/notification-provider"
+import { Lock } from "@phosphor-icons/react"
 import { restockToastMessage, type StockAdjustResponse } from "@/lib/stock-restock"
 
 function formatINR(v: number) {
@@ -23,6 +24,9 @@ export default function ProductsPage() {
   const { data: productsRes, loading, refetch } = useFetch<Product[] | { data: Product[] }>("/api/products")
 
   const { user: currentUser } = useUser()
+
+  // Search
+  const [search, setSearch] = useState("")
 
   // Add product
   const [addOpen, setAddOpen] = useState(false)
@@ -80,9 +84,13 @@ export default function ProductsPage() {
   }
 
   const products = unwrap(productsRes)
-  const totalValue = products.reduce((s, p) => s + p.currentStock * p.price, 0)
-  const lowStock = products.filter((p) => p.currentStock < 10)
-  const inStock = products.filter((p) => p.currentStock >= 10)
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(search.toLowerCase()) || 
+    (p.sku && p.sku.toLowerCase().includes(search.toLowerCase()))
+  )
+  const totalValue = filteredProducts.reduce((s, p) => s + p.currentStock * p.price, 0)
+  const lowStock = filteredProducts.filter((p) => p.currentStock < 10)
+  const inStock = filteredProducts.filter((p) => p.currentStock >= 10)
 
   async function handleAddProduct() {
     if (!addForm.name.trim()) { toast.error("Product name is required"); return }
@@ -187,11 +195,13 @@ export default function ProductsPage() {
           <h1 className="section-title">Products</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{products.length} products in catalog</p>
         </div>
-        {(!currentUser || currentUser.role === "Admin" || currentUser.role === "Inventory Manager") && (
-          <Button onClick={() => setAddOpen(true)} className="gap-2 shadow-sm shadow-primary/20">
-            <Plus size={15} weight="bold" /> Add Product
-          </Button>
-        )}
+        <Button 
+          onClick={() => setAddOpen(true)} 
+          disabled={!canManage}
+          className="gap-2 shadow-sm shadow-primary/20 w-full sm:w-auto"
+        >
+          {!canManage ? <Lock size={15} weight="bold" /> : <Plus size={15} weight="bold" />} Add Product
+        </Button>
       </div>
 
       {/* Summary stats */}
@@ -220,6 +230,14 @@ export default function ProductsPage() {
         </div>
       </div>
 
+      {/* Search */}
+      <input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search by name or SKU..."
+        className="w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+      />
+
       {/* Products table */}
       <div className="glass-card overflow-hidden">
         <Table>
@@ -243,7 +261,7 @@ export default function ProductsPage() {
                 ))}
               </TableRow>
             ))}
-            {!loading && products.length === 0 && (
+            {!loading && filteredProducts.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="py-20 text-center text-muted-foreground">
                   <Package size={36} className="mx-auto mb-3 opacity-20" />
@@ -252,7 +270,7 @@ export default function ProductsPage() {
                 </TableCell>
               </TableRow>
             )}
-            {!loading && products.map((p) => {
+            {!loading && filteredProducts.map((p) => {
               const isLow = p.currentStock < 10
               const pct = Math.min(100, (p.currentStock / Math.max(1, 100)) * 100)
               return (

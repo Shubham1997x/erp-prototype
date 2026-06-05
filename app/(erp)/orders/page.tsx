@@ -122,6 +122,7 @@ export default function OrdersPage() {
   const { data: ordersRes, loading: loadingOrders, refetch } = useFetch<PaginatedResponse<SalesOrder>>(url, [url])
   const { data: customersRes } = useFetch<Customer[] | PaginatedResponse<Customer>>("/api/customers")
   const { data: productsRes } = useFetch<Product[] | PaginatedResponse<Product>>("/api/products")
+  const { data: countsRes } = useFetch<Record<string, number>>("/api/sales-orders/counts")
 
   // Create order dialog state
   const [createOpen, setCreateOpen] = useState(false)
@@ -248,10 +249,25 @@ export default function OrdersPage() {
               <TabsList className="bg-muted/50 p-1">
                 {ORDER_TABS.map((tab) => {
                   const Icon = tab.icon
+                  let count = 0
+                  if (countsRes) {
+                    const groupStatuses = STATUS_GROUPS[tab.id]
+                    if (groupStatuses) {
+                      count = groupStatuses.reduce((acc, status) => acc + (countsRes[status] || 0), 0)
+                    } else {
+                      count = Object.values(countsRes).reduce((acc, val) => acc + val, 0)
+                    }
+                  }
+                  
                   return (
                     <TabsTrigger key={tab.id} value={tab.id} className="gap-2 px-3 py-1.5 text-xs">
                       <Icon size={14} className={resolvedTab === tab.id ? "text-primary" : "text-muted-foreground"} />
                       {tab.label}
+                      {count > 0 && (
+                        <span className="ml-1 flex h-4 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[9px] font-bold text-primary">
+                          {count}
+                        </span>
+                      )}
                     </TabsTrigger>
                   )
                 })}
@@ -314,11 +330,14 @@ export default function OrdersPage() {
                       className="cursor-pointer hover:bg-muted/30 transition-colors"
                       onClick={() => router.push(`/orders/${order.id}`)}
                     >
-                      <TableCell className="font-mono text-xs font-semibold text-primary">{order.id}</TableCell>
+                      <TableCell>
+                        <div className="font-mono text-xs font-semibold text-primary">{order.orderNumber || order.id}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono mt-0.5 truncate max-w-[100px]">{order.id}</div>
+                      </TableCell>
                       <TableCell className="font-medium text-[13px]">{cust?.name ?? "—"}</TableCell>
                       <TableCell className="text-[12px]">
                         <div className="font-medium text-foreground">{order.salesPersonName ?? "—"}</div>
-                        {order.salesPersonId && (
+                        {order.salesPersonId && order.salesPersonName && (
                           <div className="text-[10px] font-mono text-muted-foreground">{order.salesPersonId}</div>
                         )}
                       </TableCell>
@@ -329,33 +348,36 @@ export default function OrdersPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center group relative h-8 w-16 z-0 hover:z-50 cursor-pointer">
-                          {uniqueImages.slice(0, 5).map((img, idx) => (
-                            <div
-                              key={idx}
-                              className={cn(
-                                "absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-background bg-muted overflow-hidden transition-all duration-300 ease-out shadow-sm",
-                                "translate-x-[var(--stack-x)] group-hover:translate-x-[var(--hover-x)]"
-                              )}
-                              style={{ zIndex: 50 - idx, "--stack-x": `${idx * 5}px`, "--hover-x": `${idx * 24}px` } as React.CSSProperties}
-                            >
-                              <img src={img} alt="Product" className="w-full h-full object-cover" />
-                            </div>
-                          ))}
-                          {uniqueImages.length > 5 && (
-                            <div
-                              className={cn(
-                                "absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold transition-all duration-300 ease-out shadow-sm",
-                                "translate-x-[var(--stack-x)] group-hover:translate-x-[var(--hover-x)]"
-                              )}
-                              style={{ zIndex: 40, "--stack-x": `${5 * 5}px`, "--hover-x": `${5 * 24}px` } as React.CSSProperties}
-                            >
-                              +{uniqueImages.length - 5}
-                            </div>
-                          )}
-                          {uniqueImages.length === 0 && (
-                            <span className="text-xs text-muted-foreground/50 italic px-2">No images</span>
-                          )}
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center group relative h-8 w-16 z-0 hover:z-50 cursor-pointer">
+                            {uniqueImages.slice(0, 5).map((img, idx) => (
+                              <div
+                                key={idx}
+                                className={cn(
+                                  "absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-background bg-muted overflow-hidden transition-all duration-300 ease-out shadow-sm",
+                                  "translate-x-[var(--stack-x)] group-hover:translate-x-[var(--hover-x)]"
+                                )}
+                                style={{ zIndex: 50 - idx, "--stack-x": `${idx * 5}px`, "--hover-x": `${idx * 24}px` } as React.CSSProperties}
+                              >
+                                <img src={img} alt="Product" className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                            {uniqueImages.length > 5 && (
+                              <div
+                                className={cn(
+                                  "absolute top-0 left-0 w-8 h-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-[10px] font-bold transition-all duration-300 ease-out shadow-sm",
+                                  "translate-x-[var(--stack-x)] group-hover:translate-x-[var(--hover-x)]"
+                                )}
+                                style={{ zIndex: 40, "--stack-x": `${5 * 5}px`, "--hover-x": `${5 * 24}px` } as React.CSSProperties}
+                              >
+                                +{uniqueImages.length - 5}
+                              </div>
+                            )}
+                            {uniqueImages.length === 0 && (
+                              <span className="text-xs text-muted-foreground/50 italic px-2">No images</span>
+                            )}
+                          </div>
+                          <span className="text-xs font-medium text-muted-foreground">{order.lines.length} items</span>
                         </div>
                       </TableCell>
                       <TableCell>

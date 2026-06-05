@@ -47,6 +47,7 @@ export function enrichOrder(db: Db, r: Record<string, unknown>) {
 
   return {
     id: r.id,
+    orderNumber: r.order_number,
     customerId: r.customer_id,
     status: r.status,
     notes: r.notes,

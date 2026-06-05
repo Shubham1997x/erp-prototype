@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, PencilSimple, Trash, Users, Envelope, Phone, MapPin, Spinner, Buildings, Lock } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { useUser } from "@/hooks/use-user"
+import { getCompanyImageUrl } from "@/lib/utils"
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v)
@@ -141,14 +142,15 @@ export default function CustomersPage() {
   return (
     <div className="p-4 sm:p-6 space-y-5 lg:px-10 w-full mx-auto">
       <title>Customers | ShirtCo ERP</title>
-      <div className="page-header">
+      <div className="page-header flex-col items-start sm:flex-row sm:items-center gap-4">
         <div>
+          <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{allCustomers.length} registered customers</p>
         </div>
         <Button
           onClick={openCreate}
           disabled={loadingUser || !isSales}
-          className="gap-2 shadow-sm shadow-primary/20"
+          className="gap-2 shadow-sm shadow-primary/20 w-full sm:w-auto"
         >
           {(!loadingUser && !isSales) ? <Lock size={15} weight="bold" /> : <Plus size={15} weight="bold" />} Add Customer
         </Button>
@@ -178,7 +180,7 @@ export default function CustomersPage() {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search by name or email..."
-        className="w-full max-w-sm rounded-lg border border-input bg-card px-3 py-2 text-sm"
+        className="w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
       />
 
       {/* Customer cards grid */}
@@ -198,11 +200,11 @@ export default function CustomersPage() {
             const { orderCount, revenue } = customerStats(c.id)
             const initials = c.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
             return (
-              <div key={c.id} className="glass-card p-5 hover:shadow-md transition-shadow duration-200 group">
+              <div key={c.id} className="glass-card p-5 hover:shadow-md transition-shadow duration-200 group flex flex-col h-full min-h-[220px]">
                 {/* Header */}
                 <div className="flex items-start gap-3 mb-4">
                   <Avatar className="h-10 w-10 rounded-full border border-border/50 shrink-0">
-                    <AvatarImage src={`https://picsum.photos/seed/${c.id}/100/100`} alt={c.name} className="object-cover" />
+                    <AvatarImage src={getCompanyImageUrl(c.id)} alt={c.name} className="object-cover" />
                     <AvatarFallback className="bg-gradient-to-br from-primary/30 to-violet-500/30 text-primary font-bold text-sm">
                       {initials}
                     </AvatarFallback>
@@ -233,7 +235,7 @@ export default function CustomersPage() {
                 </div>
 
                 {/* Contact info */}
-                <div className="space-y-1.5 mb-4">
+                <div className="space-y-1.5 mb-4 flex-1">
                   {c.contact && (
                     <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                       <Phone size={11} className="shrink-0" /> {c.contact}
@@ -253,7 +255,7 @@ export default function CustomersPage() {
                 </div>
 
                 {/* Stats */}
-                <div className="flex items-center gap-3 pt-3 border-t border-border/50">
+                <div className="flex items-center gap-3 pt-3 border-t border-border/50 mt-auto">
                   <div className="flex-1 text-center">
                     <p className="text-[11px] text-muted-foreground">Orders</p>
                     <p className="text-sm font-bold">{orderCount}</p>
