@@ -697,9 +697,14 @@ export default function OrdersPage() {
                       className="w-full min-w-0 rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs"
                     >
                       <option value="">— Product —</option>
-                      {allProducts.map((p) => (
-                        <option key={p.id} value={p.id}>{p.name} (Stock: {p.currentStock})</option>
-                      ))}
+                      {allProducts.map((p) => {
+                        const selectedElsewhere = lines.some((l, i) => i !== idx && l.productId === p.id)
+                        return (
+                          <option key={p.id} value={p.id} disabled={selectedElsewhere}>
+                            {p.name} (Stock: {p.currentStock}){selectedElsewhere ? " — already added" : ""}
+                          </option>
+                        )
+                      })}
                     </select>
                     <div className="flex min-w-0 items-center gap-2">
                       <input

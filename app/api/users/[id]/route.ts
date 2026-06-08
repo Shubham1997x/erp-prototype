@@ -49,9 +49,8 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/users/[id]">) 
   params.push(id)
   db.prepare(`UPDATE users SET name = ?, email = ?, role = ?, status = ?${passwordClause} WHERE id = ?`).run(...params)
 
-  return NextResponse.json(
-    db.prepare("SELECT id, name, email, role, status, last_login FROM users WHERE id = ?").get(id)
-  )
+  const row = db.prepare("SELECT id, name, email, role, status, last_login FROM users WHERE id = ?").get(id) as Record<string, unknown>
+  return NextResponse.json({ ...row, lastLogin: row.last_login, last_login: undefined })
 }
 
 export async function DELETE(req: Request, ctx: RouteContext<"/api/users/[id]">) {

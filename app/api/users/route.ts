@@ -18,7 +18,8 @@ export async function GET(req: Request) {
   }
 
   const db = getDb()
-  const rows = db.prepare("SELECT id, name, email, role, status, last_login FROM users ORDER BY name ASC").all()
+  const rows = (db.prepare("SELECT id, name, email, role, status, last_login FROM users ORDER BY name ASC").all() as Record<string, unknown>[])
+    .map(r => ({ ...r, lastLogin: r.last_login, last_login: undefined }))
   return NextResponse.json(rows)
 }
 
@@ -48,8 +49,6 @@ export async function POST(req: Request) {
     "INSERT INTO users (id, name, email, role, status, password_hash) VALUES (?, ?, ?, ?, 'Active', ?)"
   ).run(id, name.trim(), email.trim().toLowerCase(), role, hashPassword(password))
 
-  return NextResponse.json(
-    db.prepare("SELECT id, name, email, role, status, last_login FROM users WHERE id = ?").get(id),
-    { status: 201 }
-  )
+  const row = db.prepare("SELECT id, name, email, role, status, last_login FROM users WHERE id = ?").get(id) as Record<string, unknown>
+  return NextResponse.json({ ...row, lastLogin: row.last_login, last_login: undefined }, { status: 201 })
 }
