@@ -1,9 +1,9 @@
-import { Geist_Mono, Inter, Manrope, Roboto, JetBrains_Mono, Instrument_Sans } from "next/font/google"
+import { Geist_Mono, Inter, Manrope, Roboto, JetBrains_Mono, Instrument_Sans, Geist } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/sonner"
 import { cn } from "@/lib/utils"
 
-const jetbrainsMonoHeading = JetBrains_Mono({subsets:['latin'],variable:'--font-heading'})
+const geistHeading = Geist({subsets:['latin'],variable:'--font-heading'})
 const inter = Inter({subsets:['latin'],variable:'--font-sans'})
 const jetbrainsMono = JetBrains_Mono({subsets:['latin'],variable:'--font-mono'})
 
@@ -24,7 +24,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", jetbrainsMonoHeading.variable, inter.variable, jetbrainsMono.variable, "font-sans")}
+      className={cn("antialiased", geistHeading.variable, inter.variable, jetbrainsMono.variable, "font-sans")}
     >
       <body suppressHydrationWarning>
         <TooltipProvider>

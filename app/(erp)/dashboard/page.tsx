@@ -29,14 +29,14 @@ function unwrap<T>(res: { data: T[] } | T[] | null | undefined): T[] {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  DRAFT: "bg-muted/80 text-muted-foreground",
-  SUBMITTED: "bg-blue-500/15 text-blue-500",
-  INVENTORY_CHECK: "bg-yellow-500/15 text-yellow-500",
-  APPROVED: "bg-emerald-500/15 text-emerald-500",
-  IN_PRODUCTION: "bg-violet-500/15 text-violet-500",
-  NEEDS_RESTOCK: "bg-amber-500/15 text-amber-500",
-  DELIVERED: "bg-green-500/15 text-green-500",
-  CANCELLED: "bg-destructive/15 text-destructive",
+  DRAFT: "bg-muted/60 text-muted-foreground border border-border/40",
+  SUBMITTED: "bg-primary/10 text-primary border border-primary/10",
+  INVENTORY_CHECK: "bg-primary/10 text-primary border border-primary/10",
+  APPROVED: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10",
+  IN_PRODUCTION: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/10",
+  NEEDS_RESTOCK: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/10",
+  DELIVERED: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10",
+  CANCELLED: "bg-destructive/10 text-destructive/90 dark:text-destructive border border-destructive/10",
 }
 
 /** Distinct color per order status for charts (avoids grey fallback for unknown keys). */
@@ -179,7 +179,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className={cn("bg-card shadow-sm", needsRestock.length > 0 && "border-amber-500/40")}>
+        <Card className="bg-card shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-1.5">
               Blocked Orders

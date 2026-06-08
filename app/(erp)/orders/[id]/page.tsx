@@ -34,21 +34,21 @@ function formatDate(iso: string | null | undefined) {
 }
 
 const ORDER_STATUS_DISPLAY: Record<string, { label: string; color: string }> = {
-  DRAFT: { label: "Draft", color: "bg-muted text-muted-foreground" },
-  SUBMITTED: { label: "Submitted", color: "bg-blue-500/15 text-blue-500" },
-  INVENTORY_CHECK: { label: "Stock check", color: "bg-blue-500/15 text-blue-500" },
-  APPROVED: { label: "Approved", color: "bg-blue-500/15 text-blue-500" },
-  IN_PRODUCTION: { label: "In production", color: "bg-violet-500/15 text-violet-600 dark:text-violet-400" },
-  CREDIT_HOLD: { label: "Credit hold", color: "bg-orange-500/15 text-orange-600 dark:text-orange-400" },
-  PARTIALLY_FULFILLED: { label: "Partial", color: "bg-violet-500/15 text-violet-600 dark:text-violet-400" },
-  NEEDS_RESTOCK: { label: "Needs restock", color: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
-  READY_TO_SHIP: { label: "Ready to ship", color: "bg-teal-500/15 text-teal-600 dark:text-teal-400" },
-  SHIPPED: { label: "Shipped", color: "bg-sky-500/15 text-sky-600 dark:text-sky-400" },
-  DELIVERED: { label: "Delivered", color: "bg-emerald-500/15 text-emerald-500" },
-  INVOICED: { label: "Invoiced", color: "bg-emerald-500/15 text-emerald-500" },
-  PAID: { label: "Paid", color: "bg-emerald-500/15 text-emerald-500" },
-  DISPUTED: { label: "Disputed", color: "bg-orange-500/15 text-orange-600 dark:text-orange-400" },
-  CANCELLED: { label: "Cancelled", color: "bg-destructive/15 text-destructive" },
+  DRAFT: { label: "Draft", color: "bg-muted/60 text-muted-foreground border border-border/40" },
+  SUBMITTED: { label: "Submitted", color: "bg-primary/10 text-primary border border-primary/10" },
+  INVENTORY_CHECK: { label: "Stock check", color: "bg-primary/10 text-primary border border-primary/10" },
+  APPROVED: { label: "Approved", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10" },
+  IN_PRODUCTION: { label: "In production", color: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/10" },
+  CREDIT_HOLD: { label: "Credit hold", color: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/10" },
+  PARTIALLY_FULFILLED: { label: "Partial", color: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/10" },
+  NEEDS_RESTOCK: { label: "Needs restock", color: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/10" },
+  READY_TO_SHIP: { label: "Ready to ship", color: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/10" },
+  SHIPPED: { label: "Shipped", color: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/10" },
+  DELIVERED: { label: "Delivered", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10" },
+  INVOICED: { label: "Invoiced", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10" },
+  PAID: { label: "Paid", color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/10" },
+  DISPUTED: { label: "Disputed", color: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/10" },
+  CANCELLED: { label: "Cancelled", color: "bg-destructive/10 text-destructive/90 dark:text-destructive border border-destructive/10" },
 }
 
 const CANCELLABLE: SalesOrderStatus[] = [
@@ -491,10 +491,10 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 )}
                 {canDownloadInvoice && (
                   <Button
-                    variant="outline"
+                    variant="default"
                     onClick={handleDownloadInvoice}
                     disabled={downloadingInvoice}
-                    className="gap-2"
+                    className="gap-2 bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90 font-medium transition-colors shadow-sm"
                   >
                     {downloadingInvoice ? (
                       <Spinner size={16} className="animate-spin" />

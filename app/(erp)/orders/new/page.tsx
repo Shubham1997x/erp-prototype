@@ -27,6 +27,7 @@ import {
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { getCompanyImageUrl } from "@/lib/avatar-utils"
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -150,6 +151,11 @@ export default function NewOrderPage() {
   async function handleCreate(submitAsDraft = false) {
     if (!customerId) {
       toast.error("Please select a customer account")
+      const el = document.getElementById("customer-select")
+      if (el) {
+        el.focus()
+        el.scrollIntoView({ behavior: "smooth", block: "center" })
+      }
       return
     }
     if (lines.length === 0) {
@@ -160,14 +166,29 @@ export default function NewOrderPage() {
       const line = lines[i]
       if (!line.productId) {
         toast.error(`Please select a shirt product for line item ${i + 1}`)
+        const el = document.getElementById(`product-select-${i}`)
+        if (el) {
+          el.focus()
+          el.scrollIntoView({ behavior: "smooth", block: "center" })
+        }
         return
       }
       if (line.qty <= 0) {
         toast.error(`Quantity for line item ${i + 1} must be greater than zero`)
+        const el = document.getElementById(`qty-input-${i}`)
+        if (el) {
+          el.focus()
+          el.scrollIntoView({ behavior: "smooth", block: "center" })
+        }
         return
       }
       if (line.gstRate === undefined) {
         toast.error(`Please select a GST % rate for line item ${i + 1}`)
+        const el = document.getElementById(`gst-select-${i}`)
+        if (el) {
+          el.focus()
+          el.scrollIntoView({ behavior: "smooth", block: "center" })
+        }
         return
       }
     }
@@ -213,42 +234,34 @@ export default function NewOrderPage() {
     <div className="mx-auto w-full space-y-6 p-4 sm:p-6 sm:px-8 lg:px-10">
       <title>New Order | ShirtCo ERP</title>
 
-      {/* Header breadcrumbs and actions */}
-      <div className="flex items-center gap-3 border-b border-border/40 pb-5">
-        <Button variant="ghost" size="icon" onClick={() => router.back()} className="h-8 w-8">
-          <ArrowLeft size={16} />
-        </Button>
-        <div>
-          <h1 className="section-title">New Sales Order</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Fill in details and save the order draft</p>
-        </div>
-      </div>
-
       {/* Workspace split layout */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start pt-2">
         
         {/* Left side: Main Editor Workspace (8 Cols) */}
         <div className="space-y-6 lg:col-span-8">
           
-          {/* Card 1: Customer Selection */}
-          <Card className="border-border/60 shadow-sm rounded-2xl overflow-hidden">
-            <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
-              <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
-                <User className="size-4 text-indigo-500" />
-                Customer Account Selection
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Select Customer *
-                </label>
+          {/* Minimal Customer Selection Row */}
+          <div className="rounded-xl border border-border/40 bg-card p-3 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 flex-1">
+              {selectedCustomer ? (
+                <img
+                  src={getCompanyImageUrl(selectedCustomer.id)}
+                  alt={selectedCustomer.name}
+                  className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-border/60 object-cover"
+                />
+              ) : (
+                <div className="h-9 w-9 shrink-0 flex items-center justify-center rounded-full border border-dashed border-border bg-muted/30">
+                  <User className="size-4.5 text-muted-foreground/40" />
+                </div>
+              )}
+              <div className="flex-1 min-w-[200px]">
                 <select
                   value={customerId}
+                  id="customer-select"
                   onChange={(e) => setCustomerId(e.target.value)}
-                  className="w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 transition-shadow outline-none"
+                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs focus:ring-2 focus:ring-primary/20 transition-shadow outline-none font-medium h-9"
                 >
-                  <option value="">— Choose a customer account —</option>
+                  <option value="">— Select Customer Account —</option>
                   {allCustomers.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name} {c.contact ? `(${c.contact})` : ""}
@@ -256,45 +269,31 @@ export default function NewOrderPage() {
                   ))}
                 </select>
               </div>
+            </div>
 
-              {selectedCustomer && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 rounded-xl border border-border/60 bg-muted/20 p-4 text-sm animate-in fade-in slide-in-from-top-1 duration-200">
-                  <div className="space-y-2">
-                    <div className="font-bold text-foreground text-base">{selectedCustomer.name}</div>
-                    
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Envelope className="size-3.5 text-slate-400" />
-                      <span>{selectedCustomer.email || "No email registered"}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Phone className="size-3.5 text-slate-400" />
-                      <span>{selectedCustomer.contact || "No phone contact"}</span>
-                    </div>
-                  </div>
-
-                  <div className="md:border-l md:border-border/50 md:pl-4 space-y-2 flex flex-col justify-center">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Payment Terms:</span>
-                      <span className="font-semibold text-foreground px-2 py-0.5 rounded bg-background border border-border/40">{selectedCustomer.paymentTerms}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">Credit Limit:</span>
-                      <span className="font-bold text-indigo-600 dark:text-indigo-400">{formatINR(selectedCustomer.creditLimit ?? 0)}</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            {selectedCustomer && (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="px-2.5 py-1.5 rounded-lg bg-muted/40 border border-border/30 text-muted-foreground">
+                  Terms: <strong className="text-foreground font-semibold">{selectedCustomer.paymentTerms}</strong>
+                </span>
+                <span className="px-2.5 py-1.5 rounded-lg bg-muted/40 border border-border/30 text-muted-foreground">
+                  Limit: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{formatINR(selectedCustomer.creditLimit ?? 0)}</strong>
+                </span>
+                <span className="px-2.5 py-1.5 rounded-lg bg-muted/40 border border-border/30 text-muted-foreground">
+                  Contact: <strong className="text-foreground font-semibold">{selectedCustomer.contact || "N/A"}</strong>
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* Card 2: Selected Order Lines (Spacious layout, wide rows) */}
           <Card className="border-border/60 shadow-sm rounded-2xl overflow-hidden">
             <CardHeader className="pb-3 border-b border-border/40 bg-muted/20 flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
-                <ShoppingCart className="size-4 text-violet-500" />
+                <ShoppingCart className="size-4 text-primary" />
                 Selected Order Lines
               </CardTitle>
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-500">
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                 {lines.length} Line item{lines.length !== 1 ? "s" : ""}
               </span>
             </CardHeader>
@@ -326,6 +325,7 @@ export default function NewOrderPage() {
                         <div className="flex-1 min-w-0">
                           <select
                             value={line.productId}
+                            id={`product-select-${idx}`}
                             onChange={(e) => updateLine(idx, "productId", e.target.value)}
                             className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                           >
@@ -378,6 +378,7 @@ export default function NewOrderPage() {
                               type="number"
                               min={1}
                               value={line.qty}
+                              id={`qty-input-${idx}`}
                               onChange={(e) => updateLine(idx, "qty", Math.max(1, parseInt(e.target.value) || 1))}
                               className="w-full border-y border-input bg-background py-1 text-center text-sm font-bold focus:outline-none"
                             />
@@ -406,6 +407,7 @@ export default function NewOrderPage() {
                           <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">GST % Rate</label>
                           <select
                             value={line.gstRate !== undefined ? line.gstRate : ""}
+                            id={`gst-select-${idx}`}
                             onChange={(e) => updateLine(idx, "gstRate", e.target.value === "" ? undefined : parseFloat(e.target.value))}
                             className="w-full rounded-xl border border-input bg-background px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
                           >
@@ -461,7 +463,7 @@ export default function NewOrderPage() {
           <Card className="border-border/60 shadow-sm rounded-2xl overflow-hidden">
             <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
               <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
-                <FileText className="size-4 text-orange-500" />
+                <FileText className="size-4 text-primary" />
                 Additional Order Notes
               </CardTitle>
             </CardHeader>
@@ -485,7 +487,7 @@ export default function NewOrderPage() {
             <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
               <div className="space-y-2">
                 <CardTitle className="text-xs font-extrabold flex items-center gap-1.5 text-foreground uppercase tracking-wider">
-                  <Package className="size-3.5 text-emerald-500" />
+                  <Package className="size-3.5 text-primary" />
                   Catalog Quick Adder
                 </CardTitle>
                 <div className="relative w-full">

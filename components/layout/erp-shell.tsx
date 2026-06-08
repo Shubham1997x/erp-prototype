@@ -12,6 +12,7 @@ import { NotificationProvider } from "@/components/providers/notification-provid
 import { getAvatarUrl } from "@/lib/avatar-utils"
 
 function pageTitle(pathname: string): string {
+  if (pathname === "/orders/new") return "New Sales Order"
   const segment = pathname.split("/").filter(Boolean).pop() ?? "dashboard"
   return segment
     .replace(/-/g, " ")
