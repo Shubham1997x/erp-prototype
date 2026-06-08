@@ -31,7 +31,15 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/customers/[id]
     UPDATE customers
     SET name=?, contact=?, email=?, address=?, credit_limit=?, payment_terms=?, updated_at=?
     WHERE id=?
-  `).run(body.name, body.contact, body.email, body.address, body.creditLimit, body.paymentTerms, now, id)
+  `).run(
+    body.name        ?? before.name,
+    body.contact     !== undefined ? body.contact     : before.contact,
+    body.email       !== undefined ? body.email       : before.email,
+    body.address     !== undefined ? body.address     : before.address,
+    body.creditLimit !== undefined ? body.creditLimit : before.credit_limit,
+    body.paymentTerms !== undefined ? body.paymentTerms : before.payment_terms,
+    now, id
+  )
 
   writeAuditLog(db, {
     userId: auth.id, action: "CUSTOMER_UPDATED", entityType: "customer", entityId: id,
