@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { 
   ArrowLeft, 
   Plus, 
@@ -255,19 +256,18 @@ export default function NewOrderPage() {
                 </div>
               )}
               <div className="flex-1 min-w-[200px]">
-                <select
-                  value={customerId}
-                  id="customer-select"
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  className="w-full rounded-lg border border-input bg-background px-3 py-2 text-xs focus:ring-2 focus:ring-primary/20 transition-shadow outline-none font-medium h-9"
-                >
-                  <option value="">— Select Customer Account —</option>
-                  {allCustomers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.contact ? `(${c.contact})` : ""}
-                    </option>
-                  ))}
-                </select>
+                <Select value={customerId} onValueChange={setCustomerId}>
+                  <SelectTrigger id="customer-select" className="w-full rounded-lg h-9 text-xs font-medium border-border bg-background">
+                    <SelectValue placeholder="— Select Customer Account —" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allCustomers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} {c.contact ? `(${c.contact})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -309,7 +309,7 @@ export default function NewOrderPage() {
                     <div
                       key={idx}
                       className={cn(
-                        "rounded-xl border border-border/60 bg-muted/15 p-4 space-y-3.5 transition-colors relative overflow-hidden",
+                        "rounded-xl border border-border/60 bg-muted/40 p-4 space-y-3.5 transition-colors relative overflow-hidden",
                         isStockDeficit && "border-amber-500/30 bg-amber-500/5"
                       )}
                     >
@@ -323,22 +323,24 @@ export default function NewOrderPage() {
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <select
-                            value={line.productId}
-                            id={`product-select-${idx}`}
-                            onChange={(e) => updateLine(idx, "productId", e.target.value)}
-                            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                          <Select
+                            value={line.productId || ""}
+                            onValueChange={(v) => updateLine(idx, "productId", v)}
                           >
-                            <option value="">— Select Shirt Product —</option>
-                            {allProducts.map((p) => {
-                              const usedElsewhere = lines.some((l, i) => i !== idx && l.productId === p.id)
-                              return (
-                                <option key={p.id} value={p.id} disabled={usedElsewhere}>
-                                  {p.name} (SKU: {p.sku}) — {formatINR(p.price)}
-                                </option>
-                              )
-                            })}
-                          </select>
+                            <SelectTrigger id={`product-select-${idx}`} className="w-full rounded-xl border-border bg-background text-sm">
+                              <SelectValue placeholder="— Select Shirt Product —" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {allProducts.map((p) => {
+                                const usedElsewhere = lines.some((l, i) => i !== idx && l.productId === p.id)
+                                return (
+                                  <SelectItem key={p.id} value={p.id} disabled={usedElsewhere}>
+                                    {p.name} (SKU: {p.sku}) — {formatINR(p.price)}
+                                  </SelectItem>
+                                )
+                              })}
+                            </SelectContent>
+                          </Select>
 
                           {prod && (
                             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-medium">
@@ -370,7 +372,7 @@ export default function NewOrderPage() {
                             <button
                               type="button"
                               onClick={() => updateLine(idx, "qty", Math.max(1, line.qty - 1))}
-                              className="px-2.5 py-1.5 border border-input rounded-l-xl bg-background hover:bg-muted font-bold text-xs"
+                              className="px-2.5 py-1.5 border border-border rounded-l-xl bg-background hover:bg-muted font-bold text-xs text-foreground"
                             >
                               -
                             </button>
@@ -380,12 +382,12 @@ export default function NewOrderPage() {
                               value={line.qty}
                               id={`qty-input-${idx}`}
                               onChange={(e) => updateLine(idx, "qty", Math.max(1, parseInt(e.target.value) || 1))}
-                              className="w-full border-y border-input bg-background py-1 text-center text-sm font-bold focus:outline-none"
+                              className="w-full border-y border-border bg-background py-1 text-center text-sm font-bold focus:outline-none text-foreground [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                             />
                             <button
                               type="button"
                               onClick={() => updateLine(idx, "qty", line.qty + 1)}
-                              className="px-2.5 py-1.5 border border-input rounded-r-xl bg-background hover:bg-muted font-bold text-xs"
+                              className="px-2.5 py-1.5 border border-border rounded-r-xl bg-background hover:bg-muted font-bold text-xs text-foreground"
                             >
                               +
                             </button>
@@ -394,28 +396,30 @@ export default function NewOrderPage() {
 
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Unit Price (₹)</label>
-                          <input
+                          <Input
                             type="number"
                             min={0}
                             value={line.unitPrice}
                             onChange={(e) => updateLine(idx, "unitPrice", parseFloat(e.target.value) || 0)}
-                            className="w-full rounded-xl border border-input bg-background px-3 py-1.5 text-sm font-semibold focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                            className="rounded-xl text-sm font-semibold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                           />
                         </div>
 
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">GST % Rate</label>
-                          <select
-                            value={line.gstRate !== undefined ? line.gstRate : ""}
-                            id={`gst-select-${idx}`}
-                            onChange={(e) => updateLine(idx, "gstRate", e.target.value === "" ? undefined : parseFloat(e.target.value))}
-                            className="w-full rounded-xl border border-input bg-background px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                          <Select
+                            value={line.gstRate !== undefined ? String(line.gstRate) : ""}
+                            onValueChange={(v) => updateLine(idx, "gstRate", v === "" ? undefined : parseFloat(v))}
                           >
-                            <option value="">— Select GST % —</option>
-                            {GST_RATES.map((r) => (
-                              <option key={r} value={r}>{r}% GST</option>
-                            ))}
-                          </select>
+                            <SelectTrigger id={`gst-select-${idx}`} className="w-full rounded-xl border-border bg-background text-sm">
+                              <SelectValue placeholder="— Select GST % —" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {GST_RATES.map((r) => (
+                                <SelectItem key={r} value={String(r)}>{r}% GST</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
 

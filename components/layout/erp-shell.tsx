@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { usePathname } from "next/navigation"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar"
@@ -10,6 +11,17 @@ import { AuthGuard } from "@/components/layout/auth-guard"
 import { UserProvider, useUser } from "@/components/providers/user-provider"
 import { NotificationProvider } from "@/components/providers/notification-provider"
 import { getAvatarUrl } from "@/lib/avatar-utils"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Eye, Check } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 function pageTitle(pathname: string): string {
   if (pathname === "/orders/new") return "New Sales Order"
@@ -29,10 +41,107 @@ function userInitials(name: string | undefined): string {
     .slice(0, 2)
 }
 
+const COLOR_MODES = [
+  {
+    value: "none",
+    label: "Standard Vision",
+    description: "Default colors",
+    swatches: ["#ef4444", "#22c55e", "#3b82f6"],
+  },
+  {
+    value: "deuteranopia",
+    label: "Deuteranopia",
+    description: "Green-blind",
+    swatches: ["#c0a040", "#808080", "#3b82f6"],
+  },
+  {
+    value: "protanopia",
+    label: "Protanopia",
+    description: "Red-blind",
+    swatches: ["#888800", "#888888", "#3b82f6"],
+  },
+  {
+    value: "tritanopia",
+    label: "Tritanopia",
+    description: "Blue-blind",
+    swatches: ["#ef4444", "#22c55e", "#808080"],
+  },
+] as const
+
+function ColorBlindPicker({ mode, onChange }: { mode: string; onChange: (v: string) => void }) {
+  const active = COLOR_MODES.find((m) => m.value === mode) ?? COLOR_MODES[0]
+  const isFiltered = mode !== "none"
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          title="Color accessibility mode"
+          className={cn(
+            "h-8 gap-1.5 px-2 text-[11px] font-semibold",
+            isFiltered
+              ? "text-primary bg-primary/10 hover:bg-primary/15"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Eye className="h-3.5 w-3.5" />
+          {isFiltered && <span className="hidden sm:inline">{active.label}</span>}
+        </Button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuLabel className="text-[11px] text-muted-foreground font-normal pb-1">
+          Color Vision Mode
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {COLOR_MODES.map((m) => (
+          <DropdownMenuItem
+            key={m.value}
+            onClick={() => onChange(m.value)}
+            className="flex items-center gap-2.5 py-2 cursor-pointer"
+          >
+            <div className="flex gap-0.5 shrink-0">
+              {m.swatches.map((c, i) => (
+                <span
+                  key={i}
+                  className="inline-block h-3 w-3 rounded-full border border-black/10"
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium leading-none">{m.label}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{m.description}</p>
+            </div>
+            {mode === m.value && <Check className="h-3 w-3 shrink-0 text-primary" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function ERPHeader() {
   const { user, loading } = useUser()
   const pathname = usePathname()
   const initials = userInitials(user?.name)
+
+  const [colorBlindMode, setColorBlindMode] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("colorblind-mode") || "none"
+    }
+    return "none"
+  })
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("colorblind-mode", colorBlindMode)
+      // Dispatch so ERPShell wrapper div picks up the new filter
+      window.dispatchEvent(new CustomEvent("colorblind-change", { detail: colorBlindMode }))
+    }
+  }, [colorBlindMode])
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-14">
@@ -42,7 +151,9 @@ function ERPHeader() {
         <h1 className="truncate font-heading text-sm font-bold">{pageTitle(pathname)}</h1>
       </div>
 
-      <div className="flex items-center gap-2 px-4">
+      <div className="flex items-center gap-3 px-4">
+        <ColorBlindPicker mode={colorBlindMode} onChange={setColorBlindMode} />
+
         <NotificationBell />
 
         <div
@@ -71,19 +182,43 @@ function ERPHeader() {
   )
 }
 
+function FilteredShell({ children }: { children: React.ReactNode }) {
+  const [filterMode, setFilterMode] = useState<string>(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("colorblind-mode") || "none"
+    return "none"
+  })
+
+  useEffect(() => {
+    const handler = (e: Event) => setFilterMode((e as CustomEvent).detail)
+    window.addEventListener("colorblind-change", handler)
+    return () => window.removeEventListener("colorblind-change", handler)
+  }, [])
+
+  const filterStyle =
+    filterMode !== "none" ? { filter: `url(#colorblind-${filterMode})` } : undefined
+
+  return (
+    <div style={filterStyle} className="flex h-svh w-full overflow-hidden">
+      {children}
+    </div>
+  )
+}
+
 export function ERPShell({ children }: { children: React.ReactNode }) {
   return (
     <UserProvider>
       <NotificationProvider>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset>
-            <ERPHeader />
-            <main className="flex-1 overflow-auto bg-muted/20">
-              <AuthGuard>{children}</AuthGuard>
-            </main>
-          </SidebarInset>
-        </SidebarProvider>
+        <FilteredShell>
+          <SidebarProvider>
+            <AppSidebar />
+            <SidebarInset>
+              <ERPHeader />
+              <main className="flex-1 overflow-auto bg-muted/20">
+                <AuthGuard>{children}</AuthGuard>
+              </main>
+            </SidebarInset>
+          </SidebarProvider>
+        </FilteredShell>
       </NotificationProvider>
     </UserProvider>
   )
