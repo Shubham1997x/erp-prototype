@@ -128,12 +128,12 @@ function ERPHeader() {
   const pathname = usePathname()
   const initials = userInitials(user?.name)
 
-  const [colorBlindMode, setColorBlindMode] = useState<string>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("colorblind-mode") || "none"
-    }
-    return "none"
-  })
+  const [colorBlindMode, setColorBlindMode] = useState<string>("none")
+
+  useEffect(() => {
+    const stored = localStorage.getItem("colorblind-mode")
+    if (stored && stored !== "none") setColorBlindMode(stored)
+  }, [])
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -183,10 +183,12 @@ function ERPHeader() {
 }
 
 function FilteredShell({ children }: { children: React.ReactNode }) {
-  const [filterMode, setFilterMode] = useState<string>(() => {
-    if (typeof window !== "undefined") return localStorage.getItem("colorblind-mode") || "none"
-    return "none"
-  })
+  const [filterMode, setFilterMode] = useState<string>("none")
+
+  useEffect(() => {
+    const stored = localStorage.getItem("colorblind-mode")
+    if (stored && stored !== "none") setFilterMode(stored)
+  }, [])
 
   useEffect(() => {
     const handler = (e: Event) => setFilterMode((e as CustomEvent).detail)
