@@ -219,12 +219,8 @@ export default function OrdersPage() {
   const { data: customersRes } = useFetch<Customer[] | PaginatedResponse<Customer>>("/api/customers")
   const { data: productsRes } = useFetch<Product[] | PaginatedResponse<Product>>("/api/products")
 
-  // Create order dialog
-  const [createOpen, setCreateOpen] = useState(false)
-  const [customerId, setCustomerId] = useState("")
-  const [lines, setLines] = useState<SalesOrderLine[]>([{ productId: "", qty: 1, unitPrice: 0 }])
-  const [saving, setSaving] = useState(false)
   const [downloadingInvoiceId, setDownloadingInvoiceId] = useState<string | null>(null)
+
 
   function unwrap<T>(res: PaginatedResponse<T> | T[] | null | undefined): T[] {
     if (!res) return []
@@ -273,42 +269,7 @@ export default function OrdersPage() {
     }
   }
 
-  function updateLine(idx: number, field: keyof SalesOrderLine, value: string | number) {
-    setLines((prev) => {
-      const next = [...prev]
-      if (field === "productId") {
-        const prod = allProducts.find((p) => p.id === value)
-        next[idx] = { ...next[idx], productId: value as string, unitPrice: prod?.price ?? 0 }
-      } else {
-        next[idx] = { ...next[idx], [field]: value }
-      }
-      return next
-    })
-  }
 
-  function addLine() {
-    setLines((l) => [...l, { productId: "", qty: 1, unitPrice: 0 }])
-  }
-
-  async function handleCreate() {
-    if (!customerId || lines.some((l) => !l.productId || l.qty <= 0)) {
-      toast.error("Please fill in all order fields")
-      return
-    }
-    setSaving(true)
-    try {
-      await apiPost("/api/sales-orders", { customerId, lines })
-      toast.success("Order created")
-      setCreateOpen(false)
-      setCustomerId("")
-      setLines([{ productId: "", qty: 1, unitPrice: 0 }])
-      refetch()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to create order")
-    } finally {
-      setSaving(false)
-    }
-  }
 
   return (
     <div className="mx-auto w-full space-y-4 p-4 sm:p-6 sm:px-8 lg:px-10">
@@ -325,7 +286,7 @@ export default function OrdersPage() {
         </div>
         {canCreateOrder && !loadingUser && (
           <Button
-            onClick={() => setCreateOpen(true)}
+            onClick={() => router.push("/orders/new")}
             className="gap-2 shadow-sm shadow-primary/20"
           >
             <Plus size={15} weight="bold" /> New Order
@@ -428,7 +389,7 @@ export default function OrdersPage() {
                 {summaryOrders.length === 0 ? "Create your first order to get started" : "Try another tab"}
               </p>
               {canCreateOrder && summaryOrders.length === 0 && (
-                <Button className="mt-4 gap-2" onClick={() => setCreateOpen(true)}>
+                <Button className="mt-4 gap-2" onClick={() => router.push("/orders/new")}>
                   <Plus size={15} weight="bold" /> New Order
                 </Button>
               )}
@@ -656,114 +617,7 @@ export default function OrdersPage() {
           )}
         </>
       )}
-
-      {/* ── Create Order Dialog ─────────────────────────────────────────────── */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-heading">
-              <ShoppingCart size={18} className="text-primary" /> New Order
-            </DialogTitle>
-          </DialogHeader>
-          <div className="min-w-0 space-y-4 py-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                Customer *
-              </label>
-              <select
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="">— Select Customer —</option>
-                {allCustomers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                Order Lines *
-              </label>
-              <div className="max-h-[300px] min-w-0 space-y-2 overflow-y-auto pr-1">
-                {lines.map((line, idx) => (
-                  <div key={idx} className="min-w-0 space-y-2 rounded-lg border border-border/60 p-2.5">
-                    <select
-                      value={line.productId}
-                      onChange={(e) => updateLine(idx, "productId", e.target.value)}
-                      className="w-full min-w-0 rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs"
-                    >
-                      <option value="">— Product —</option>
-                      {allProducts.map((p) => {
-                        const selectedElsewhere = lines.some((l, i) => i !== idx && l.productId === p.id)
-                        return (
-                          <option key={p.id} value={p.id} disabled={selectedElsewhere}>
-                            {p.name} (Stock: {p.currentStock}){selectedElsewhere ? " — already added" : ""}
-                          </option>
-                        )
-                      })}
-                    </select>
-                    <div className="flex min-w-0 items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        value={line.qty}
-                        onChange={(e) => updateLine(idx, "qty", parseInt(e.target.value) || 1)}
-                        className="w-16 shrink-0 rounded-lg border border-input bg-background px-2 py-1.5 text-center text-xs font-bold"
-                        placeholder="Qty"
-                      />
-                      <span className="min-w-0 flex-1 truncate text-right text-[11px] font-bold text-muted-foreground">
-                        {line.unitPrice > 0 ? formatINR(line.qty * line.unitPrice) : "—"}
-                      </span>
-                      {lines.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setLines((l) => l.filter((_, i) => i !== idx))}
-                          className="shrink-0 text-muted-foreground transition-colors hover:text-destructive"
-                        >
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <Button variant="outline" size="sm" className="w-full gap-1 border-dashed" onClick={addLine}>
-                <Plus size={12} /> Add Line
-              </Button>
-            </div>
-
-            {/* Order total preview */}
-            {lines.some((l) => l.unitPrice > 0) && (
-              <div className="flex items-center justify-between rounded-lg bg-muted/30 px-4 py-2.5">
-                <span className="text-xs font-medium text-muted-foreground">Order Total</span>
-                <span className="text-sm font-bold">
-                  {formatINR(lines.reduce((s, l) => s + l.qty * l.unitPrice, 0))}
-                </span>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreate}
-              disabled={
-                !customerId ||
-                lines.some((l) => !l.productId || l.qty <= 0) ||
-                saving
-              }
-            >
-              {saving && <Spinner size={14} className="mr-1 animate-spin" />}
-              Create Order
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
+

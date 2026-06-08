@@ -6,14 +6,24 @@ import { useFetch, apiPost } from "@/hooks/use-api"
 import { useUser } from "@/hooks/use-user"
 import type { Customer, Product, SalesOrderLine } from "@/lib/types"
 import { Button } from "@/components/ui/button"
-import {
-  ArrowLeft,
-  Plus,
-  Trash,
-  ShoppingCart,
-  Spinner,
-  Package,
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { 
+  ArrowLeft, 
+  Plus, 
+  Trash, 
+  ShoppingCart, 
+  Spinner, 
+  Package, 
   Warning,
+  User,
+  Envelope,
+  Phone,
+  MagnifyingGlass,
+  CheckCircle,
+  FileText,
+  TShirt
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -28,34 +38,66 @@ function formatINR(v: number) {
 
 const GST_RATES = [0, 5, 12, 18]
 
-interface LineItem extends SalesOrderLine {
-  gstRate: number
+interface LineItem extends Omit<SalesOrderLine, "gstRate"> {
+  gstRate?: number
+}
+
+interface PaginatedResponse<T> {
+  data: T[]
+  total: number
 }
 
 export default function NewOrderPage() {
   const router = useRouter()
   const { isSales, isAdmin } = useUser()
 
-  const { data: allCustomers = [] } = useFetch<Customer[]>("/api/customers")
-  const { data: allProducts = [] } = useFetch<Product[]>("/api/products")
+  const customersRes = useFetch<Customer[] | PaginatedResponse<Customer>>("/api/customers")
+  const productsRes = useFetch<Product[] | PaginatedResponse<Product>>("/api/products")
+
+  function unwrap<T>(res: PaginatedResponse<T> | T[] | null | undefined): T[] {
+    if (!res) return []
+    if (Array.isArray(res)) return res
+    if (Array.isArray((res as PaginatedResponse<T>).data)) return (res as PaginatedResponse<T>).data
+    return []
+  }
+
+  const allCustomers = unwrap(customersRes.data)
+  const allProducts = unwrap(productsRes.data)
 
   const [customerId, setCustomerId] = useState("")
   const [notes, setNotes] = useState("")
   const [lines, setLines] = useState<LineItem[]>([
-    { productId: "", qty: 1, unitPrice: 0, gstRate: 18 },
+    { productId: "", qty: 1, unitPrice: 0, gstRate: undefined },
   ])
   const [saving, setSaving] = useState(false)
+  
+  // Catalog search state
+  const [searchQuery, setSearchQuery] = useState("")
 
   const canCreate = isSales || isAdmin
 
   const selectedCustomer = allCustomers.find((c) => c.id === customerId)
+  const hasProducts = lines.some((l) => l.productId)
 
-  function updateLine(idx: number, field: keyof LineItem, value: string | number) {
+  // Filter products for the quick-add gallery based on search
+  const filteredCatalog = useMemo(() => {
+    if (!searchQuery.trim()) return allProducts.slice(0, 6) // Show top 6 in the sidebar
+    return allProducts.filter(p => 
+      p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      p.sku.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+  }, [allProducts, searchQuery])
+
+  function updateLine(idx: number, field: keyof LineItem, value: string | number | undefined) {
     setLines((prev) => {
       const next = [...prev]
       if (field === "productId") {
         const prod = allProducts.find((p) => p.id === value)
-        next[idx] = { ...next[idx], productId: value as string, unitPrice: prod?.price ?? 0 }
+        next[idx] = { 
+          ...next[idx], 
+          productId: value as string, 
+          unitPrice: prod?.price ?? 0 
+        }
       } else {
         next[idx] = { ...next[idx], [field]: value }
       }
@@ -63,8 +105,32 @@ export default function NewOrderPage() {
     })
   }
 
-  function addLine() {
-    setLines((l) => [...l, { productId: "", qty: 1, unitPrice: 0, gstRate: 18 }])
+  function addLine(prodId: string = "") {
+    const prod = allProducts.find((p) => p.id === prodId)
+    const price = prod?.price ?? 0
+    
+    // Check if product is already in the list
+    const existsIdx = lines.findIndex(l => l.productId === prodId)
+    if (prodId && existsIdx > -1) {
+      // Just increment quantity
+      setLines(prev => {
+        const next = [...prev]
+        next[existsIdx].qty += 1
+        return next
+      })
+      toast.info(`Increased quantity of ${prod?.name}`)
+      return
+    }
+
+    // Replace the first empty line if it exists
+    const emptyIdx = lines.findIndex(l => !l.productId)
+    if (emptyIdx > -1 && prodId) {
+      updateLine(emptyIdx, "productId", prodId)
+      return
+    }
+
+    setLines((l) => [...l, { productId: prodId, qty: 1, unitPrice: price, gstRate: undefined }])
+    if (prod) toast.success(`Added ${prod.name} to order`)
   }
 
   function removeLine(idx: number) {
@@ -76,18 +142,36 @@ export default function NewOrderPage() {
     [lines]
   )
   const taxTotal = useMemo(
-    () => lines.reduce((s, l) => s + (l.qty * l.unitPrice * l.gstRate) / 100, 0),
+    () => lines.reduce((s, l) => s + (l.qty * l.unitPrice * (l.gstRate ?? 0)) / 100, 0),
     [lines]
   )
   const grandTotal = subtotal + taxTotal
 
-  const isValid = !!customerId && lines.length > 0 && lines.every((l) => l.productId && l.qty > 0)
-
   async function handleCreate(submitAsDraft = false) {
-    if (!isValid) {
-      toast.error("Please fill in all required fields")
+    if (!customerId) {
+      toast.error("Please select a customer account")
       return
     }
+    if (lines.length === 0) {
+      toast.error("Please add at least one custom item / line")
+      return
+    }
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      if (!line.productId) {
+        toast.error(`Please select a shirt product for line item ${i + 1}`)
+        return
+      }
+      if (line.qty <= 0) {
+        toast.error(`Quantity for line item ${i + 1} must be greater than zero`)
+        return
+      }
+      if (line.gstRate === undefined) {
+        toast.error(`Please select a GST % rate for line item ${i + 1}`)
+        return
+      }
+    }
+
     setSaving(true)
     try {
       const order = await apiPost("/api/sales-orders", {
@@ -101,7 +185,7 @@ export default function NewOrderPage() {
         })),
         status: submitAsDraft ? "DRAFT" : "SUBMITTED",
       })
-      toast.success(submitAsDraft ? "Order saved as draft" : "Order submitted")
+      toast.success(submitAsDraft ? "Order saved as draft" : "Order submitted successfully")
       router.push(`/orders/${(order as { id: string }).id}`)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create order")
@@ -112,269 +196,437 @@ export default function NewOrderPage() {
 
   if (!canCreate) {
     return (
-      <div className="flex h-96 items-center justify-center text-muted-foreground">
-        <div className="text-center">
-          <Warning size={40} className="mx-auto mb-3 opacity-30" />
-          <p className="font-medium">Access Denied</p>
-          <p className="mt-1 text-sm">Only Sales Executives can create orders.</p>
+      <div className="flex h-96 items-center justify-center text-muted-foreground p-6">
+        <div className="text-center max-w-sm">
+          <Warning className="mx-auto mb-3 size-12 text-destructive opacity-80" />
+          <p className="font-semibold text-lg text-foreground">Access Denied</p>
+          <p className="mt-1.5 text-sm text-muted-foreground">Only Sales Executives or Administrators can create sales orders.</p>
+          <Button onClick={() => router.back()} className="mt-4 gap-2" variant="outline">
+            <ArrowLeft className="size-4" /> Go Back
+          </Button>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-6 p-4 sm:p-6 sm:px-8">
+    <div className="mx-auto w-full space-y-6 p-4 sm:p-6 sm:px-8 lg:px-10">
       <title>New Order | ShirtCo ERP</title>
 
-      {/* Header */}
-      <div className="flex items-center gap-3">
+      {/* Header breadcrumbs and actions */}
+      <div className="flex items-center gap-3 border-b border-border/40 pb-5">
         <Button variant="ghost" size="icon" onClick={() => router.back()} className="h-8 w-8">
           <ArrowLeft size={16} />
         </Button>
         <div>
-          <h1 className="font-heading text-xl font-bold">New Sales Order</h1>
-          <p className="text-sm text-muted-foreground">Fill in the details and submit or save as draft</p>
+          <h1 className="section-title">New Sales Order</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Fill in details and save the order draft</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left: main form */}
-        <div className="space-y-5 lg:col-span-2">
-
-          {/* Customer */}
-          <div className="glass-card p-5 space-y-4">
-            <h2 className="font-heading text-sm font-semibold">Customer</h2>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Select Customer *
-              </label>
-              <select
-                value={customerId}
-                onChange={(e) => setCustomerId(e.target.value)}
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="">— Choose a customer —</option>
-                {allCustomers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            {selectedCustomer && (
-              <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm space-y-1">
-                <p className="font-medium">{selectedCustomer.name}</p>
-                {selectedCustomer.email && <p className="text-xs text-muted-foreground">{selectedCustomer.email}</p>}
-                {selectedCustomer.contact && <p className="text-xs text-muted-foreground">{selectedCustomer.contact}</p>}
-                <p className="text-xs text-muted-foreground">
-                  Credit limit: {formatINR(selectedCustomer.creditLimit ?? 0)} · {selectedCustomer.paymentTerms}
-                </p>
+      {/* Workspace split layout */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
+        
+        {/* Left side: Main Editor Workspace (8 Cols) */}
+        <div className="space-y-6 lg:col-span-8">
+          
+          {/* Card 1: Customer Selection */}
+          <Card className="border-border/60 shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                <User className="size-4 text-indigo-500" />
+                Customer Account Selection
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Select Customer *
+                </label>
+                <select
+                  value={customerId}
+                  onChange={(e) => setCustomerId(e.target.value)}
+                  className="w-full rounded-xl border border-input bg-background px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 transition-shadow outline-none"
+                >
+                  <option value="">— Choose a customer account —</option>
+                  {allCustomers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.contact ? `(${c.contact})` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
-            )}
-          </div>
 
-          {/* Order Lines */}
-          <div className="glass-card p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="font-heading text-sm font-semibold">Order Lines</h2>
-              <span className="text-xs text-muted-foreground">{lines.length} item{lines.length !== 1 ? "s" : ""}</span>
-            </div>
+              {selectedCustomer && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 rounded-xl border border-border/60 bg-muted/20 p-4 text-sm animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="space-y-2">
+                    <div className="font-bold text-foreground text-base">{selectedCustomer.name}</div>
+                    
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Envelope className="size-3.5 text-slate-400" />
+                      <span>{selectedCustomer.email || "No email registered"}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Phone className="size-3.5 text-slate-400" />
+                      <span>{selectedCustomer.contact || "No phone contact"}</span>
+                    </div>
+                  </div>
 
-            <div className="space-y-3">
-              {lines.map((line, idx) => {
-                const prod = allProducts.find((p) => p.id === line.productId)
-                const lineTotal = line.qty * line.unitPrice
-                const lineTax = (lineTotal * line.gstRate) / 100
-                return (
-                  <div
-                    key={idx}
-                    className="rounded-xl border border-border/60 bg-muted/20 p-4 space-y-3"
-                  >
-                    {/* Product select */}
-                    <div className="flex items-start gap-3">
-                      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border bg-muted/30 flex items-center justify-center">
-                        {prod?.imageUrl ? (
-                          <img src={prod.imageUrl} alt={prod.name} className="h-full w-full object-cover"
-                            onError={(e) => { e.currentTarget.style.display = "none" }} />
-                        ) : (
-                          <Package size={18} className="text-muted-foreground/40" />
+                  <div className="md:border-l md:border-border/50 md:pl-4 space-y-2 flex flex-col justify-center">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Payment Terms:</span>
+                      <span className="font-semibold text-foreground px-2 py-0.5 rounded bg-background border border-border/40">{selectedCustomer.paymentTerms}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Credit Limit:</span>
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400">{formatINR(selectedCustomer.creditLimit ?? 0)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Selected Order Lines (Spacious layout, wide rows) */}
+          <Card className="border-border/60 shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3 border-b border-border/40 bg-muted/20 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                <ShoppingCart className="size-4 text-violet-500" />
+                Selected Order Lines
+              </CardTitle>
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-500">
+                {lines.length} Line item{lines.length !== 1 ? "s" : ""}
+              </span>
+            </CardHeader>
+            <CardContent className="p-4 sm:p-5 space-y-4">
+              <div className="space-y-3">
+                {lines.map((line, idx) => {
+                  const prod = allProducts.find((p) => p.id === line.productId)
+                  const lineTotal = line.qty * line.unitPrice
+                  const lineTax = (lineTotal * (line.gstRate ?? 0)) / 100
+                  const isStockDeficit = prod ? (line.qty > (prod.currentStock - prod.reservedStock)) : false
+
+                  return (
+                    <div
+                      key={idx}
+                      className={cn(
+                        "rounded-xl border border-border/60 bg-muted/15 p-4 space-y-3.5 transition-colors relative overflow-hidden",
+                        isStockDeficit && "border-amber-500/30 bg-amber-500/5"
+                      )}
+                    >
+                      {/* Top row: Product Dropdown Selection & Image */}
+                      <div className="flex items-start gap-3.5">
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border bg-muted/30 flex items-center justify-center relative">
+                          {prod?.imageUrl ? (
+                            <img src={prod.imageUrl} alt={prod.name} className="h-full w-full object-cover" />
+                          ) : (
+                            <Package className="size-5 text-muted-foreground/30" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <select
+                            value={line.productId}
+                            onChange={(e) => updateLine(idx, "productId", e.target.value)}
+                            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                          >
+                            <option value="">— Select Shirt Product —</option>
+                            {allProducts.map((p) => {
+                              const usedElsewhere = lines.some((l, i) => i !== idx && l.productId === p.id)
+                              return (
+                                <option key={p.id} value={p.id} disabled={usedElsewhere}>
+                                  {p.name} (SKU: {p.sku}) — {formatINR(p.price)}
+                                </option>
+                              )
+                            })}
+                          </select>
+
+                          {prod && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground font-medium">
+                              <span>SKU: <strong className="font-semibold text-foreground">{prod.sku}</strong></span>
+                              <span>•</span>
+                              <span>Available Stock: <strong className={cn("font-semibold", isStockDeficit ? "text-amber-500" : "text-emerald-500")}>
+                                {prod.currentStock - prod.reservedStock} pcs
+                              </strong> (Total: {prod.currentStock})</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {lines.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeLine(idx)}
+                            className="mt-1 p-1.5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded-lg transition-colors"
+                          >
+                            <Trash className="size-4" />
+                          </button>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <select
-                          value={line.productId}
-                          onChange={(e) => updateLine(idx, "productId", e.target.value)}
-                          className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm"
-                        >
-                          <option value="">— Select Product —</option>
-                          {allProducts.map((p) => {
-                            const usedElsewhere = lines.some((l, i) => i !== idx && l.productId === p.id)
-                            return (
-                              <option key={p.id} value={p.id} disabled={usedElsewhere}>
-                                {p.name} — {formatINR(p.price)} (Stock: {p.currentStock}){usedElsewhere ? " · already added" : ""}
-                              </option>
-                            )
-                          })}
-                        </select>
-                        {prod && (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            SKU: {prod.sku} · Available: {prod.currentStock - prod.reservedStock} pcs
-                          </p>
-                        )}
+
+                      {/* Middle row: Quantity adjustments / unit price / tax rate */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Order Quantity</label>
+                          <div className="flex items-center">
+                            <button
+                              type="button"
+                              onClick={() => updateLine(idx, "qty", Math.max(1, line.qty - 1))}
+                              className="px-2.5 py-1.5 border border-input rounded-l-xl bg-background hover:bg-muted font-bold text-xs"
+                            >
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min={1}
+                              value={line.qty}
+                              onChange={(e) => updateLine(idx, "qty", Math.max(1, parseInt(e.target.value) || 1))}
+                              className="w-full border-y border-input bg-background py-1 text-center text-sm font-bold focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateLine(idx, "qty", line.qty + 1)}
+                              className="px-2.5 py-1.5 border border-input rounded-r-xl bg-background hover:bg-muted font-bold text-xs"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Unit Price (₹)</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={line.unitPrice}
+                            onChange={(e) => updateLine(idx, "unitPrice", parseFloat(e.target.value) || 0)}
+                            className="w-full rounded-xl border border-input bg-background px-3 py-1.5 text-sm font-semibold focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">GST % Rate</label>
+                          <select
+                            value={line.gstRate !== undefined ? line.gstRate : ""}
+                            onChange={(e) => updateLine(idx, "gstRate", e.target.value === "" ? undefined : parseFloat(e.target.value))}
+                            className="w-full rounded-xl border border-input bg-background px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                          >
+                            <option value="">— Select GST % —</option>
+                            {GST_RATES.map((r) => (
+                              <option key={r} value={r}>{r}% GST</option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
-                      {lines.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeLine(idx)}
-                          className="mt-1 shrink-0 text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          <Trash size={15} />
-                        </button>
+
+                      {/* Stock deficiency warnings */}
+                      {isStockDeficit && (
+                        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 bg-amber-500/15 px-3 py-2 rounded-xl text-xs font-semibold">
+                          <Warning className="size-4 shrink-0" />
+                          <span>Stock Warning: Order quantity exceeds currently available shirt stock. This will trigger a manufacturing restock hold.</span>
+                        </div>
+                      )}
+
+                      {/* Bottom line summary calculator display */}
+                      {lineTotal > 0 && (
+                        <div className="flex items-center justify-between rounded-xl bg-background/80 border border-border/40 px-3.5 py-2 text-xs font-medium text-muted-foreground">
+                          <div className="space-x-1">
+                            <span>Sub:</span>
+                            <strong className="text-foreground">{formatINR(lineTotal)}</strong>
+                          </div>
+                          <div className="space-x-1">
+                            <span>GST:</span>
+                            <strong className="text-foreground">{line.gstRate !== undefined ? formatINR(lineTax) : "—"}</strong>
+                          </div>
+                          <div className="space-x-1">
+                            <span className="font-bold text-primary">Line Total:</span>
+                            <strong className="text-foreground font-bold">{formatINR(lineTotal + (line.gstRate !== undefined ? lineTax : 0))}</strong>
+                          </div>
+                        </div>
                       )}
                     </div>
+                  )
+                })}
+              </div>
 
-                    {/* Qty / Price / GST */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Qty</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={line.qty}
-                          onChange={(e) => updateLine(idx, "qty", Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm font-medium"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unit Price (₹)</label>
-                        <input
-                          type="number"
-                          min={0}
-                          value={line.unitPrice}
-                          onChange={(e) => updateLine(idx, "unitPrice", parseFloat(e.target.value) || 0)}
-                          className="w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm font-medium"
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">GST %</label>
-                        <select
-                          value={line.gstRate}
-                          onChange={(e) => updateLine(idx, "gstRate", parseFloat(e.target.value))}
-                          className="w-full rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm"
-                        >
-                          {GST_RATES.map((r) => (
-                            <option key={r} value={r}>{r}%</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
+              <Button
+                variant="outline"
+                className="w-full py-5 rounded-xl border-dashed border-2 text-xs font-bold gap-2 text-muted-foreground hover:text-foreground"
+                onClick={() => addLine("")}
+              >
+                <Plus className="size-3.5" /> Add Custom Item / Line
+              </Button>
+            </CardContent>
+          </Card>
 
-                    {/* Line total */}
-                    {lineTotal > 0 && (
-                      <div className="flex items-center justify-between rounded-lg bg-background/60 px-3 py-1.5 text-xs">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span className="font-medium">{formatINR(lineTotal)}</span>
-                        <span className="text-muted-foreground">GST</span>
-                        <span className="font-medium">{formatINR(lineTax)}</span>
-                        <span className="text-muted-foreground">Line Total</span>
-                        <span className="font-bold">{formatINR(lineTotal + lineTax)}</span>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full gap-1.5 border-dashed"
-              onClick={addLine}
-            >
-              <Plus size={13} /> Add Product
-            </Button>
-          </div>
-
-          {/* Notes */}
-          <div className="glass-card p-5 space-y-3">
-            <h2 className="font-heading text-sm font-semibold">Notes</h2>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Special instructions, delivery notes, etc."
-              rows={3}
-              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none"
-            />
-          </div>
+          {/* Card 3: Additional Notes */}
+          <Card className="border-border/60 shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                <FileText className="size-4 text-orange-500" />
+                Additional Order Notes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Specify special packaging, customized shirt stitchings, dispatch priority, or shipping instructions..."
+                rows={2}
+                className="w-full rounded-xl resize-none"
+              />
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Right: summary + actions */}
-        <div className="space-y-4">
-          <div className="glass-card p-5 space-y-4 sticky top-6">
-            <h2 className="font-heading text-sm font-semibold flex items-center gap-2">
-              <ShoppingCart size={15} className="text-primary" /> Order Summary
-            </h2>
-
-            {lines.filter((l) => l.productId).length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">No products added yet</p>
-            ) : (
+        {/* Right side: Sticky helper sidebar (4 Cols) */}
+        <div className="lg:col-span-4 lg:sticky lg:top-6 space-y-6">
+          
+          {/* Card 4: Visual Catalog Quick Adder (Compact right-side widget) */}
+          <Card className="border-border/60 shadow-sm rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3 border-b border-border/40 bg-muted/20">
               <div className="space-y-2">
-                {lines
-                  .filter((l) => l.productId)
-                  .map((l, i) => {
-                    const prod = allProducts.find((p) => p.id === l.productId)
+                <CardTitle className="text-xs font-extrabold flex items-center gap-1.5 text-foreground uppercase tracking-wider">
+                  <Package className="size-3.5 text-emerald-500" />
+                  Catalog Quick Adder
+                </CardTitle>
+                <div className="relative w-full">
+                  <MagnifyingGlass className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search shirts..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8.5 h-8 text-xs rounded-lg"
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-3">
+              {filteredCatalog.length === 0 ? (
+                <div className="text-center py-4 text-xs text-muted-foreground">
+                  No matching shirts found
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {filteredCatalog.map(p => {
+                    const isRestockNeeded = p.currentStock <= p.reservedStock
                     return (
-                      <div key={i} className="flex items-center justify-between text-xs gap-2">
-                        <span className="truncate text-muted-foreground flex-1">{prod?.name ?? l.productId}</span>
-                        <span className="shrink-0 font-medium">{formatINR(l.qty * l.unitPrice)}</span>
+                      <div 
+                        key={p.id} 
+                        onClick={() => addLine(p.id)}
+                        className="group relative cursor-pointer rounded-lg border border-border/40 bg-card p-2 hover:border-primary/30 hover:shadow transition-all flex flex-col justify-between"
+                      >
+                        <div className="space-y-1">
+                          <div className="h-16 w-full bg-muted/30 rounded overflow-hidden border border-border/30 flex items-center justify-center relative">
+                            {p.imageUrl ? (
+                              <img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform" />
+                            ) : (
+                              <TShirt className="size-5 text-muted-foreground/30" />
+                            )}
+                            <span className={cn(
+                              "absolute bottom-0.5 right-0.5 px-1 rounded text-[8px] font-bold shadow-sm",
+                              isRestockNeeded ? "bg-amber-500/90 text-white" : "bg-emerald-500/90 text-white"
+                            )}>
+                              {isRestockNeeded ? "Out" : `${p.currentStock}`}
+                            </span>
+                          </div>
+                          <div>
+                            <div className="text-[10px] font-bold text-foreground truncate group-hover:text-primary transition-colors leading-tight">{p.name}</div>
+                            <div className="text-[8px] text-muted-foreground font-mono">SKU: {p.sku}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between mt-1 pt-1 border-t border-border/20">
+                          <span className="text-[10px] font-extrabold text-foreground">{formatINR(p.price)}</span>
+                          <span className="text-[8px] text-primary font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                            + Add
+                          </span>
+                        </div>
                       </div>
                     )
                   })}
-              </div>
-            )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-            <div className="border-t border-border/50 pt-3 space-y-1.5 text-sm">
-              <div className="flex justify-between text-muted-foreground text-xs">
-                <span>Subtotal</span>
-                <span>{formatINR(subtotal)}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground text-xs">
-                <span>GST</span>
-                <span>{formatINR(taxTotal)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-base pt-1">
-                <span>Total</span>
-                <span>{formatINR(grandTotal)}</span>
+          {/* Card 5: Live Receipt Widget (Populates only when products are added) */}
+          {hasProducts ? (
+            <div className="bg-card border-border/60 shadow-lg rounded-2xl overflow-hidden relative border animate-in fade-in slide-in-from-right-4 duration-300">
+              {/* Top color accent strip */}
+              <div className="h-1.5 bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500" />
+              
+              <div className="p-5 space-y-5">
+                <h3 className="font-heading text-sm font-bold flex items-center gap-2 border-b pb-3">
+                  <ShoppingCart className="size-4 text-primary" />
+                  Live Invoice Summary
+                </h3>
+
+                <div className="space-y-3 max-h-[180px] overflow-y-auto pr-1">
+                  {lines
+                    .filter((l) => l.productId)
+                    .map((l, idx) => {
+                      const prod = allProducts.find((p) => p.id === l.productId)
+                      return (
+                        <div key={idx} className="flex justify-between items-start text-xs gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-foreground truncate">{prod?.name || "Loading..."}</div>
+                            <div className="text-muted-foreground text-[10px] mt-0.5">Qty: {l.qty} × {formatINR(l.unitPrice)}</div>
+                          </div>
+                          <span className="font-bold text-foreground shrink-0">{formatINR(l.qty * l.unitPrice)}</span>
+                        </div>
+                      )
+                    })}
+                </div>
+
+                {/* Receipt Dotted line divider */}
+                <div className="border-t border-dashed border-border/60 my-2" />
+
+                <div className="space-y-2.5 text-sm">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span className="font-semibold text-foreground">{formatINR(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>GST/Taxes Collected</span>
+                    <span className="font-semibold text-foreground">{formatINR(taxTotal)}</span>
+                  </div>
+                  
+                  <div className="border-t border-border/50 pt-2.5 flex justify-between items-baseline">
+                    <span className="font-bold text-foreground">Grand Total</span>
+                    <span className="font-extrabold text-lg text-primary">{formatINR(grandTotal)}</span>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="space-y-2 pt-3 border-t border-border/30">
+                  <Button
+                    className="w-full h-11 rounded-xl font-bold shadow-md shadow-primary/10 hover:shadow-primary/20 gap-2 transition-all bg-primary text-primary-foreground hover:bg-primary border-none"
+                    disabled={saving}
+                    onClick={() => handleCreate(true)}
+                  >
+                    {saving ? (
+                      <Spinner className="size-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="size-4" />
+                    )}
+                    Create Draft Order
+                  </Button>
+                  
+                  <Button
+                    variant="ghost"
+                    className="w-full text-xs text-muted-foreground font-semibold hover:text-destructive"
+                    onClick={() => router.back()}
+                  >
+                    Discard Changes
+                  </Button>
+                </div>
               </div>
             </div>
-
-            <div className="space-y-2 pt-1">
-              <Button
-                className="w-full gap-2"
-                disabled={!isValid || saving}
-                onClick={() => handleCreate(false)}
-              >
-                {saving && <Spinner size={14} className="animate-spin" />}
-                Submit Order
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={!isValid || saving}
-                onClick={() => handleCreate(true)}
-              >
-                Save as Draft
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full text-muted-foreground"
-                onClick={() => router.back()}
-              >
-                Cancel
-              </Button>
+          ) : (
+            <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-2xl bg-card p-4">
+              Add products to generate live invoice calculations
             </div>
-          </div>
+          )}
         </div>
+
       </div>
     </div>
   )
