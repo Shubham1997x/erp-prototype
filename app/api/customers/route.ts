@@ -11,9 +11,15 @@ function row(r: Record<string, unknown>) {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const db = getDb()
-  const rows = db.prepare("SELECT * FROM customers ORDER BY name ASC").all() as Record<string, unknown>[]
+  const { searchParams } = new URL(req.url)
+  const includeDeleted = searchParams.get("deleted") === "true"
+  const rows = db.prepare(
+    includeDeleted
+      ? "SELECT * FROM customers WHERE is_active=0 ORDER BY name ASC"
+      : "SELECT * FROM customers WHERE is_active=1 ORDER BY name ASC"
+  ).all() as Record<string, unknown>[]
   return NextResponse.json(rows.map(row))
 }
 

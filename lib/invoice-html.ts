@@ -3,6 +3,8 @@ export interface InvoiceLine {
   sku?: string
   qty: number
   unitPrice: number
+  gstRate?: number
+  lineTax?: number
   lineTotal: number
 }
 
@@ -45,6 +47,8 @@ function formatDate(iso: string): string {
 }
 
 export function buildInvoiceHtml(doc: InvoiceDocument): string {
+  const hasGst = doc.lines.some((l) => (l.gstRate ?? 0) > 0)
+
   const lineRows = doc.lines
     .map(
       (l) => `
@@ -55,6 +59,7 @@ export function buildInvoiceHtml(doc: InvoiceDocument): string {
           </td>
           <td class="num">${l.qty}</td>
           <td class="num">${escapeHtml(formatINR(l.unitPrice))}</td>
+          ${hasGst ? `<td class="num">${l.gstRate ? `${l.gstRate}%` : "—"}</td>` : ""}
           <td class="num">${escapeHtml(formatINR(l.lineTotal))}</td>
         </tr>`
     )
@@ -131,6 +136,7 @@ export function buildInvoiceHtml(doc: InvoiceDocument): string {
           <th>Description</th>
           <th class="num">Qty</th>
           <th class="num">Unit price</th>
+          ${hasGst ? `<th class="num">GST</th>` : ""}
           <th class="num">Amount</th>
         </tr>
       </thead>
@@ -138,7 +144,7 @@ export function buildInvoiceHtml(doc: InvoiceDocument): string {
     </table>
     <div class="totals">
       <div class="row"><span>Subtotal</span><span>${escapeHtml(formatINR(doc.subtotal))}</span></div>
-      <div class="row"><span>Tax</span><span>${escapeHtml(formatINR(doc.taxAmount))}</span></div>
+      ${doc.taxAmount > 0 ? `<div class="row"><span>GST</span><span>${escapeHtml(formatINR(doc.taxAmount))}</span></div>` : ""}
       <div class="row grand"><span>Total due</span><span>${escapeHtml(formatINR(doc.total))}</span></div>
     </div>
     ${

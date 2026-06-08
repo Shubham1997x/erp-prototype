@@ -432,7 +432,7 @@ export default function OrdersPage() {
                   <Plus size={15} weight="bold" /> New Order
                 </Button>
               )}
-              {summaryOrders.length > 0 && (
+              {summaryOrders.length > 0 && activeTab !== "in_progress" && tabCounts.in_progress > 0 && (
                 <Button variant="link" size="sm" className="mt-2" onClick={() => switchTab("in_progress")}>
                   View in-progress orders
                 </Button>

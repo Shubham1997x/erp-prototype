@@ -702,6 +702,47 @@ function runMigrations(db: Database.Database) {
     addCol(db, "sales_order_lines", "gst_rate", "REAL")
     db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (10)").run()
   }
+
+  // v12: expanded orders seed (so-007 … so-016)
+  if (!ran.has(12)) {
+    const insSO  = db.prepare("INSERT OR IGNORE INTO sales_orders (id,customer_id,status,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?)")
+    const insSOL = db.prepare("INSERT INTO sales_order_lines (order_id,product_id,qty,unit_price) VALUES (?,?,?,?)")
+    // Backfill order numbers: find current max seq
+    const maxRow = db.prepare("SELECT MAX(CAST(REPLACE(order_number,'#','') AS INTEGER)) as m FROM sales_orders WHERE order_number IS NOT NULL").get() as { m: number | null }
+    let seq = (maxRow.m ?? 1000)
+    for (const so of salesOrders) {
+      const existing = db.prepare("SELECT id FROM sales_orders WHERE id=?").get(so.id)
+      if (!existing) {
+        seq++
+        insSO.run(so.id, so.customerId, so.status, so.createdBy, so.createdAt, so.updatedAt)
+        db.prepare("UPDATE sales_orders SET order_number=? WHERE id=?").run(`#${seq}`, so.id)
+        for (const l of so.lines) insSOL.run(so.id, l.productId, l.qty, l.unitPrice)
+      }
+    }
+    db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (12)").run()
+  }
+
+  // v11: expanded product catalog (15 demo shirts)
+  if (!ran.has(11)) {
+    addCol(db, "products", "category",  "TEXT")
+    addCol(db, "products", "unit_cost", "REAL DEFAULT 0")
+    const upsert = db.prepare(`
+      INSERT INTO products (id, name, sku, unit_of_measure, price, bom_id, current_stock, reserved_stock, image_url, category, unit_cost, is_active)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,1)
+      ON CONFLICT(id) DO UPDATE SET
+        name=excluded.name, sku=excluded.sku, price=excluded.price,
+        current_stock=excluded.current_stock, reserved_stock=excluded.reserved_stock,
+        image_url=excluded.image_url, category=excluded.category, unit_cost=excluded.unit_cost
+    `)
+    for (const p of products) {
+      upsert.run(
+        p.id, p.name, p.sku, p.unitOfMeasure, p.price, p.bomId ?? null,
+        p.currentStock, p.reservedStock,
+        (p as any).imageUrl ?? null, (p as any).category ?? null, (p as any).unitCost ?? 0
+      )
+    }
+    db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (11)").run()
+  }
 }
 
 // ─── Seed data ────────────────────────────────────────────────────────────────
@@ -716,8 +757,8 @@ function seedDatabase(db: Database.Database) {
   const insUser = db.prepare("INSERT OR IGNORE INTO users (id,name,email,role,status,last_login,password_hash) VALUES (?,?,?,?,?,?,?)")
   users.forEach(u => insUser.run(u.id, u.name, u.email, u.role, u.status, u.lastLogin, u.passwordHash ?? null))
 
-  const insProduct = db.prepare("INSERT OR IGNORE INTO products (id,name,sku,unit_of_measure,price,bom_id,current_stock,reserved_stock) VALUES (?,?,?,?,?,?,?,?)")
-  products.forEach(p => insProduct.run(p.id, p.name, p.sku, p.unitOfMeasure, p.price, p.bomId, p.currentStock, p.reservedStock))
+  const insProduct = db.prepare("INSERT OR IGNORE INTO products (id,name,sku,unit_of_measure,price,bom_id,current_stock,reserved_stock,image_url,category,unit_cost) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+  products.forEach(p => insProduct.run(p.id, p.name, p.sku, p.unitOfMeasure, p.price, p.bomId ?? null, p.currentStock, p.reservedStock, (p as any).imageUrl ?? null, (p as any).category ?? null, (p as any).unitCost ?? 0))
 
   const insSO  = db.prepare("INSERT OR IGNORE INTO sales_orders (id,customer_id,status,created_by,created_at,updated_at) VALUES (?,?,?,?,?,?)")
   const insSOL = db.prepare("INSERT INTO sales_order_lines (order_id,product_id,qty,unit_price) VALUES (?,?,?,?)")

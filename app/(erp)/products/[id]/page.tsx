@@ -207,10 +207,18 @@ export default function ProductDetailPage() {
         <div className="md:col-span-1">
           <div className="aspect-square rounded-2xl border bg-card shadow-sm overflow-hidden flex items-center justify-center p-2 relative">
             {product.imageUrl ? (
-              <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover rounded-xl" />
-            ) : (
-              <Package size={80} className="text-muted-foreground/30" />
-            )}
+              <img
+                src={product.imageUrl}
+                alt={product.name}
+                className="w-full h-full object-cover rounded-xl"
+                onError={(e) => {
+                  const t = e.currentTarget
+                  t.style.display = "none"
+                  t.parentElement?.querySelector(".img-fallback")?.removeAttribute("hidden")
+                }}
+              />
+            ) : null}
+            <Package size={80} className="img-fallback text-muted-foreground/30" hidden={!!product.imageUrl} />
           </div>
         </div>
 

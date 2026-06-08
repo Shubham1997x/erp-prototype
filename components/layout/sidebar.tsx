@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
+import { getAvatarUrl } from "@/lib/avatar-utils"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: ChartBar },
@@ -200,8 +201,8 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
             onClick={() => setShowSwitcher(!showSwitcher)}
             className="p-3 flex items-center gap-2.5 cursor-pointer hover:bg-sidebar-accent rounded-lg m-1 transition-colors relative"
           >
-            <div className="size-7 rounded-full bg-linear-to-br from-primary to-violet-600 flex items-center justify-center text-[11px] font-bold text-white shrink-0 shadow shadow-primary/30">
-              {initials}
+            <div className="size-7 rounded-full overflow-hidden shrink-0">
+              <img src={getAvatarUrl(currentUser.id)} alt={currentUser.name} className="h-full w-full object-cover" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-[12px] font-semibold truncate text-sidebar-foreground flex items-center gap-1">

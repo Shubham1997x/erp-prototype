@@ -27,9 +27,11 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/customers/[id]
   const before = db.prepare("SELECT * FROM customers WHERE id=?").get(id) as Record<string, unknown> | undefined
   if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
+  const isActive = body.isActive !== undefined ? (body.isActive ? 1 : 0) : before.is_active
+
   db.prepare(`
     UPDATE customers
-    SET name=?, contact=?, email=?, address=?, credit_limit=?, payment_terms=?, updated_at=?
+    SET name=?, contact=?, email=?, address=?, credit_limit=?, payment_terms=?, is_active=?, deleted_at=?, updated_at=?
     WHERE id=?
   `).run(
     body.name        ?? before.name,
@@ -38,6 +40,8 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/customers/[id]
     body.address     !== undefined ? body.address     : before.address,
     body.creditLimit !== undefined ? body.creditLimit : before.credit_limit,
     body.paymentTerms !== undefined ? body.paymentTerms : before.payment_terms,
+    isActive,
+    isActive === 1 ? null : (before.deleted_at ?? now),
     now, id
   )
 

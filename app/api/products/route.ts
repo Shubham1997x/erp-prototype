@@ -21,9 +21,18 @@ export async function POST(req: Request) {
   const bomId = `bom-${Date.now()}`
 
   const createTransaction = db.transaction(() => {
-    // Assign default image if not provided
-    const randomDefaultId = Math.floor(Math.random() * 10) + 1
-    const finalImageUrl = body.imageUrl || `/defaults/tshirt-${randomDefaultId}.jpg`
+    // Assign default image if not provided — picks from curated Unsplash shirt photos
+    const defaultImages = [
+      "https://images.unsplash.com/photo-1598033129183-c4f50c736f10?w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1607345366928-199ea26cfe3e?w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1618517351616-38fb9c5210c6?w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1603252109303-2751441dd157?w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1614944848172-4e0d0e8b4e25?w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1625910513956-7a2f3e6e48a7?w=600&auto=format&fit=crop",
+    ]
+    const finalImageUrl = body.imageUrl || defaultImages[Math.floor(Math.random() * defaultImages.length)]
 
     // 1. Create Product
     db.prepare(`

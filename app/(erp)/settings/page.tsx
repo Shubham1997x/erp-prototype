@@ -42,6 +42,7 @@ import {
   BellRinging,
   ChartBar,
 } from "@phosphor-icons/react"
+import { getAvatarUrl } from "@/lib/avatar-utils"
 import type { UserRole, User as UserType, Product, SalesOrder } from "@/lib/types"
 
 const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
@@ -120,8 +121,8 @@ function AccountCard() {
         <CardDescription>Signed-in user for this browser session</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-lg font-bold text-primary">
-          {userInitials(user.name)}
+        <div className="size-14 shrink-0 rounded-full overflow-hidden">
+          <img src={getAvatarUrl(user.id)} alt={user.name} className="h-full w-full object-cover" />
         </div>
         <div className="space-y-1 min-w-0">
           <p className="font-semibold text-lg leading-tight">{user.name}</p>
@@ -511,8 +512,8 @@ function AdminUsersPanel() {
                 <TableRow key={u.id} className="hover:bg-muted/20">
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <div className="size-7 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center">
-                        {userInitials(u.name)}
+                      <div className="size-7 rounded-full overflow-hidden shrink-0">
+                        <img src={getAvatarUrl(u.id)} alt={u.name} className="h-full w-full object-cover" />
                       </div>
                       <span className="font-medium text-sm">{u.name}</span>
                     </div>

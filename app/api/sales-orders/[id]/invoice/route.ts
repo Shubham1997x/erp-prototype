@@ -50,18 +50,22 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const lines = lineRows.map((l) => {
       const qty = Number(l.qty)
       const unitPrice = Number(l.unit_price)
+      const gstRate = Number(l.gst_rate ?? 0)
       const lineTotal = qty * unitPrice
+      const lineTax = Math.round(lineTotal * gstRate) / 100
       return {
         description: String(l.product_name ?? l.product_id),
         sku: l.sku ? String(l.sku) : undefined,
         qty,
         unitPrice,
+        gstRate,
         lineTotal,
+        lineTax,
       }
     })
 
     const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0)
-    const taxAmount = 0
+    const taxAmount = lines.reduce((s, l) => s + l.lineTax, 0)
     const total = subtotal + taxAmount
 
     const issueDate =

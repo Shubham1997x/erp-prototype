@@ -58,8 +58,10 @@ export default function ProductsPage() {
 
   const { user: currentUser } = useUser()
 
-  // Search
+  // Search & pagination
   const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 10
 
   // Add product
   const [addOpen, setAddOpen] = useState(false)
@@ -133,6 +135,8 @@ export default function ProductsPage() {
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       (p.sku && p.sku.toLowerCase().includes(search.toLowerCase()))
   )
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE))
+  const pagedProducts = filteredProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const totalValue = filteredProducts.reduce(
     (s, p) => s + p.currentStock * p.price,
     0
@@ -333,7 +337,7 @@ export default function ProductsPage() {
       {/* Search */}
       <input
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        onChange={(e) => { setSearch(e.target.value); setPage(1) }}
         placeholder="Search by name or SKU..."
         className="w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm shadow-sm transition-colors focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
       />
@@ -385,7 +389,7 @@ export default function ProductsPage() {
               </TableRow>
             )}
             {!loading &&
-              filteredProducts.map((p) => {
+              pagedProducts.map((p) => {
                 const isLow = p.currentStock < 10
                 const pct = Math.min(
                   100,
@@ -406,13 +410,18 @@ export default function ProductsPage() {
                             src={p.imageUrl}
                             alt={p.name}
                             className="h-full w-full object-cover"
+                            onError={(e) => {
+                              const t = e.currentTarget
+                              t.style.display = "none"
+                              t.parentElement?.querySelector(".img-fallback")?.removeAttribute("hidden")
+                            }}
                           />
-                        ) : (
-                          <Package
-                            size={20}
-                            className="text-muted-foreground/50"
-                          />
-                        )}
+                        ) : null}
+                        <Package
+                          size={20}
+                          className="img-fallback text-muted-foreground/50"
+                          hidden={!!p.imageUrl}
+                        />
                       </div>
                     </TableCell>
                     <TableCell className="text-[13px] font-medium text-foreground">
@@ -502,6 +511,26 @@ export default function ProductsPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
+      {!loading && filteredProducts.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filteredProducts.length)} of {filteredProducts.length} products
+          </span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPage(p => p - 1)} disabled={page === 1}>
+              Previous
+            </Button>
+            <span className="text-muted-foreground font-medium">
+              {page} / {totalPages}
+            </span>
+            <Button variant="outline" size="sm" onClick={() => setPage(p => p + 1)} disabled={page === totalPages}>
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* ── Add Product Dialog ───────────────────────────────────────────────── */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

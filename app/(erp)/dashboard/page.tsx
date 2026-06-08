@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ShoppingCart, Users, Warning, CheckCircle, ArrowRight, TrendUp } from "@phosphor-icons/react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
+import { getCompanyImageUrl } from "@/lib/avatar-utils"
 
 import {
   Bar, BarChart, CartesianGrid, XAxis, YAxis,
@@ -318,7 +319,7 @@ export default function DashboardPage() {
                     <div key={so.id} className="group flex items-center gap-3">
                       <Avatar className="h-8 w-8 shrink-0 border border-border/50">
                         {customer?.id && (
-                          <AvatarImage src={`https://picsum.photos/seed/${customer.id}/100/100`} alt={customer.name} className="object-cover" />
+                          <AvatarImage src={getCompanyImageUrl(customer.id)} alt={customer.name} className="object-cover" />
                         )}
                         <AvatarFallback className="bg-primary/10 text-xs font-bold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                           {initials}

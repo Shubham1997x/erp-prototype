@@ -31,9 +31,11 @@ import {
   Spinner,
   Buildings,
   Lock,
+  ArrowCounterClockwise,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { useUser } from "@/hooks/use-user"
+import { getCompanyImageUrl } from "@/lib/avatar-utils"
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -160,11 +162,18 @@ function CustomerFormFields({
 
 export default function CustomersPage() {
   const { isSales, loading: loadingUser } = useUser()
+  const [tab, setTab] = useState<"active" | "deleted">("active")
+
   const {
     data: customersRes,
     loading,
     refetch,
   } = useFetch<Customer[] | { data: Customer[] }>("/api/customers")
+  const {
+    data: deletedRes,
+    loading: loadingDeleted,
+    refetch: refetchDeleted,
+  } = useFetch<Customer[]>("/api/customers?deleted=true")
   const { data: ordersRes } = useFetch<{ data: SalesOrder[] }>(
     "/api/sales-orders"
   )
@@ -240,8 +249,20 @@ export default function CustomersPage() {
       toast.success("Customer deleted")
       setDeleteTarget(null)
       refetch()
+      refetchDeleted()
     } catch {
       toast.error("Failed to delete customer")
+    }
+  }
+
+  async function handleRestore(id: string) {
+    try {
+      await apiPatch(`/api/customers/${id}`, { isActive: true })
+      toast.success("Customer restored")
+      refetch()
+      refetchDeleted()
+    } catch {
+      toast.error("Failed to restore customer")
     }
   }
 
@@ -312,16 +333,85 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Search */}
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search by name or email..."
-        className="w-full max-w-sm rounded-lg border border-input bg-card px-3 py-2 text-sm"
-      />
+      {/* Tabs + Search */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex rounded-lg border border-input overflow-hidden text-sm">
+          <button
+            onClick={() => setTab("active")}
+            className={`px-4 py-2 font-medium transition-colors ${tab === "active" ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground"}`}
+          >
+            Active ({allCustomers.length})
+          </button>
+          <button
+            onClick={() => setTab("deleted")}
+            className={`px-4 py-2 font-medium transition-colors ${tab === "deleted" ? "bg-destructive text-destructive-foreground" : "bg-card text-muted-foreground hover:text-foreground"}`}
+          >
+            Deleted ({(deletedRes ?? []).length})
+          </button>
+        </div>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name or email..."
+          className="w-full max-w-sm rounded-lg border border-input bg-card px-3 py-2 text-sm"
+        />
+      </div>
+
+      {/* Deleted customers grid */}
+      {tab === "deleted" && (
+        (deletedRes ?? []).length === 0 ? (
+          <div className="glass-card py-16 text-center text-muted-foreground">
+            <Users size={36} className="mx-auto mb-3 opacity-20" />
+            <p className="font-medium">No deleted customers</p>
+            <p className="mt-1 text-sm">Deleted customers will appear here</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {(deletedRes ?? [])
+              .filter((c: Customer) => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase()))
+              .map((c: Customer) => {
+                const initials = c.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2)
+                return (
+                  <div key={c.id} className="glass-card p-5 opacity-75">
+                    <div className="mb-4 flex items-start gap-3">
+                      <Avatar className="h-10 w-10 shrink-0 rounded-full border border-border/50">
+                        <AvatarImage src={getCompanyImageUrl(c.id)} alt={c.name} className="object-cover grayscale" />
+                        <AvatarFallback className="bg-muted text-sm font-bold text-muted-foreground">{initials}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-heading text-[14px] font-semibold line-through text-muted-foreground">{c.name}</p>
+                        <p className="text-[11px] text-muted-foreground">Deleted customer</p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => handleRestore(c.id)}
+                        disabled={loadingUser || !isSales}
+                      >
+                        <ArrowCounterClockwise size={12} className="mr-1" />
+                        Restore
+                      </Button>
+                    </div>
+                    {c.contact && (
+                      <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                        <Phone size={11} className="shrink-0" /> {c.contact}
+                      </div>
+                    )}
+                    {c.email && (
+                      <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+                        <Envelope size={11} className="shrink-0" /> {c.email}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+          </div>
+        )
+      )}
 
       {/* Customer cards grid */}
-      {loading ? (
+      {tab === "active" && (loading ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[...Array(4)].map((_, i) => (
             <div key={i} className="shimmer h-44 rounded-xl" />
@@ -352,7 +442,7 @@ export default function CustomersPage() {
                 <div className="mb-4 flex items-start gap-3">
                   <Avatar className="h-10 w-10 shrink-0 rounded-full border border-border/50">
                     <AvatarImage
-                      src={`https://picsum.photos/seed/${c.id}/100/100`}
+                      src={getCompanyImageUrl(c.id)}
                       alt={c.name}
                       className="object-cover"
                     />
@@ -433,7 +523,7 @@ export default function CustomersPage() {
             )
           })}
         </div>
-      )}
+      ))}
 
       {/* Create / Edit dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
