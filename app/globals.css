@@ -6,7 +6,9 @@
 
 /* ── Light Mode ────────────────────────────────────────────────────────────── */
 :root {
-  --radius: 0;
+  --radius: 6px;
+  --background: oklch(0.972 0.006 240);
+  --foreground: oklch(0.145 0.008 326);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0.008 326);
   --popover: oklch(1 0 0);
