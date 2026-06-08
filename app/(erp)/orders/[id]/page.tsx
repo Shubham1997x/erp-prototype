@@ -494,7 +494,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                     variant="default"
                     onClick={handleDownloadInvoice}
                     disabled={downloadingInvoice}
-                    className="gap-2 bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90 font-medium transition-colors shadow-sm"
+                    className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700 font-medium transition-colors shadow-sm"
                   >
                     {downloadingInvoice ? (
                       <Spinner size={16} className="animate-spin" />

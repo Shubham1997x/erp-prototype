@@ -5,9 +5,11 @@ const DEFAULT_HASH = hashPassword("Password@123")
 
 // ─── Products ─────────────────────────────────────────────────────────────────
 export const products: Product[] = [
-  { id: "prod-1", name: "Classic White Shirt", sku: "SHT-WHT-001", unitOfMeasure: "pcs", price: 899, bomId: null, currentStock: 120, reservedStock: 0 },
-  { id: "prod-2", name: "Oxford Blue Shirt",   sku: "SHT-BLU-002", unitOfMeasure: "pcs", price: 999, bomId: null, currentStock: 85,  reservedStock: 0 },
-  { id: "prod-3", name: "Linen Casual Shirt",  sku: "SHT-LIN-003", unitOfMeasure: "pcs", price: 1199, bomId: null, currentStock: 40, reservedStock: 0 },
+  { id: "prod-1", name: "Classic White Shirt",  sku: "SHT-WHT-001", unitOfMeasure: "pcs", price: 899,  bomId: null, currentStock: 120, reservedStock: 0, imageUrl: "/defaults/tshirt-1.jpg" },
+  { id: "prod-2", name: "Oxford Blue Shirt",    sku: "SHT-BLU-002", unitOfMeasure: "pcs", price: 999,  bomId: null, currentStock: 85,  reservedStock: 0, imageUrl: "/defaults/tshirt-2.jpg" },
+  { id: "prod-3", name: "Linen Casual Shirt",   sku: "SHT-LIN-003", unitOfMeasure: "pcs", price: 1199, bomId: null, currentStock: 40,  reservedStock: 0, imageUrl: "/defaults/tshirt-3.jpg" },
+  { id: "prod-4", name: "Cotton Kurta",         sku: "KRT-CTN-004", unitOfMeasure: "pcs", price: 799,  bomId: null, currentStock: 65,  reservedStock: 0, imageUrl: "/defaults/tshirt-4.jpg" },
+  { id: "prod-5", name: "Denim Casual Shirt",   sku: "SHT-DEN-005", unitOfMeasure: "pcs", price: 1349, bomId: null, currentStock: 55,  reservedStock: 0, imageUrl: "/defaults/tshirt-5.jpg" },
 ]
 
 // ─── Customers ────────────────────────────────────────────────────────────────

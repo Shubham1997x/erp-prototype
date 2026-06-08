@@ -743,6 +743,24 @@ function runMigrations(db: Database.Database) {
     }
     db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (11)").run()
   }
+
+  // v13: add Cotton Kurta and Denim Casual Shirt with images
+  if (!ran.has(13)) {
+    const upsert = db.prepare(`
+      INSERT INTO products (id, name, sku, unit_of_measure, price, bom_id, current_stock, reserved_stock, image_url, is_active)
+      VALUES (?,?,?,?,?,?,?,?,?,1)
+      ON CONFLICT(id) DO UPDATE SET
+        name=excluded.name, sku=excluded.sku, price=excluded.price,
+        current_stock=excluded.current_stock, image_url=excluded.image_url
+    `)
+    upsert.run("prod-4", "Cotton Kurta",       "KRT-CTN-004", "pcs", 799,  null, 65, 0, "/defaults/tshirt-4.jpg")
+    upsert.run("prod-5", "Denim Casual Shirt",  "SHT-DEN-005", "pcs", 1349, null, 55, 0, "/defaults/tshirt-5.jpg")
+    // Also patch images onto existing prod-1/2/3 if they have no image yet
+    db.prepare(`UPDATE products SET image_url='/defaults/tshirt-1.jpg' WHERE id='prod-1' AND (image_url IS NULL OR image_url='')`).run()
+    db.prepare(`UPDATE products SET image_url='/defaults/tshirt-2.jpg' WHERE id='prod-2' AND (image_url IS NULL OR image_url='')`).run()
+    db.prepare(`UPDATE products SET image_url='/defaults/tshirt-3.jpg' WHERE id='prod-3' AND (image_url IS NULL OR image_url='')`).run()
+    db.prepare("INSERT OR IGNORE INTO _migrations (version) VALUES (13)").run()
+  }
 }
 
 // ─── Seed data ────────────────────────────────────────────────────────────────

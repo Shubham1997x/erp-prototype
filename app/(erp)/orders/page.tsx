@@ -252,7 +252,7 @@ export default function OrdersPage() {
   }
 
   const contentReady = !loadingOrders && !loadingUser
-  const canCreateOrder = isSales
+  const canCreateOrder = isSales || isAdmin
   const canDownloadInvoice = isSales || isAdmin
 
   async function handleDownloadInvoice(orderId: string) {
@@ -430,8 +430,8 @@ export default function OrdersPage() {
                       <div className="flex items-center gap-1">
                         {canDownloadInvoice && INVOICE_ELIGIBLE_STATUSES.includes(order.status as (typeof INVOICE_ELIGIBLE_STATUSES)[number]) && (
                           <Button
-                            variant="ghost" size="sm"
-                            className="h-7 gap-1 px-2 text-xs text-muted-foreground"
+                            variant="default" size="sm"
+                            className="h-7 gap-1 px-2 text-xs bg-emerald-600 text-white hover:bg-emerald-700 font-medium shadow-sm"
                             disabled={downloadingInvoiceId === order.id}
                             onClick={() => handleDownloadInvoice(order.id)}
                           >
@@ -538,7 +538,7 @@ export default function OrdersPage() {
                             {canDownloadInvoice && INVOICE_ELIGIBLE_STATUSES.includes(order.status as (typeof INVOICE_ELIGIBLE_STATUSES)[number]) && (
                                <Button
                                  variant="default" size="sm"
-                                 className="h-8 gap-1 bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90 font-medium transition-colors shadow-sm"
+                                 className="h-8 gap-1 bg-emerald-600 text-white hover:bg-emerald-700 font-medium transition-colors shadow-sm"
                                  disabled={downloadingInvoiceId === order.id}
                                  onClick={() => handleDownloadInvoice(order.id)}
                                  title="Download invoice"

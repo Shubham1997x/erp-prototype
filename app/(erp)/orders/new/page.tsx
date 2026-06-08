@@ -63,8 +63,8 @@ export default function NewOrderPage() {
     return []
   }
 
-  const allCustomers = unwrap(customersRes.data)
-  const allProducts = unwrap(productsRes.data)
+  const allCustomers = useMemo(() => unwrap(customersRes.data), [customersRes.data])
+  const allProducts = useMemo(() => unwrap(productsRes.data), [productsRes.data])
 
   const [customerId, setCustomerId] = useState("")
   const [notes, setNotes] = useState("")
@@ -107,6 +107,15 @@ export default function NewOrderPage() {
     })
   }
 
+  function focusField(id: string) {
+    const el = document.getElementById(id)
+    if (!el) return
+    el.scrollIntoView({ behavior: "smooth", block: "center" })
+    el.focus()
+    el.classList.add("!ring-2", "!ring-destructive", "!border-destructive")
+    setTimeout(() => el.classList.remove("!ring-2", "!ring-destructive", "!border-destructive"), 2000)
+  }
+
   function addLine(prodId: string = "") {
     const prod = allProducts.find((p) => p.id === prodId)
     const price = prod?.price ?? 0
@@ -114,12 +123,8 @@ export default function NewOrderPage() {
     // Check if product is already in the list
     const existsIdx = lines.findIndex(l => l.productId === prodId)
     if (prodId && existsIdx > -1) {
-      // Just increment quantity
-      setLines(prev => {
-        const next = [...prev]
-        next[existsIdx].qty += 1
-        return next
-      })
+      // Just increment quantity — spread to avoid mutating existing object
+      setLines(prev => prev.map((l, i) => i === existsIdx ? { ...l, qty: l.qty + 1 } : l))
       toast.info(`Increased quantity of ${prod?.name}`)
       return
     }
@@ -152,11 +157,7 @@ export default function NewOrderPage() {
   async function handleCreate(submitAsDraft = false) {
     if (!customerId) {
       toast.error("Please select a customer account")
-      const el = document.getElementById("customer-select")
-      if (el) {
-        el.focus()
-        el.scrollIntoView({ behavior: "smooth", block: "center" })
-      }
+      focusField("customer-select")
       return
     }
     if (lines.length === 0) {
@@ -167,29 +168,17 @@ export default function NewOrderPage() {
       const line = lines[i]
       if (!line.productId) {
         toast.error(`Please select a shirt product for line item ${i + 1}`)
-        const el = document.getElementById(`product-select-${i}`)
-        if (el) {
-          el.focus()
-          el.scrollIntoView({ behavior: "smooth", block: "center" })
-        }
+        focusField(`product-select-${i}`)
         return
       }
       if (line.qty <= 0) {
         toast.error(`Quantity for line item ${i + 1} must be greater than zero`)
-        const el = document.getElementById(`qty-input-${i}`)
-        if (el) {
-          el.focus()
-          el.scrollIntoView({ behavior: "smooth", block: "center" })
-        }
+        focusField(`qty-input-${i}`)
         return
       }
-      if (line.gstRate === undefined) {
+      if (line.gstRate === undefined || line.gstRate === null) {
         toast.error(`Please select a GST % rate for line item ${i + 1}`)
-        const el = document.getElementById(`gst-select-${i}`)
-        if (el) {
-          el.focus()
-          el.scrollIntoView({ behavior: "smooth", block: "center" })
-        }
+        focusField(`gst-select-${i}`)
         return
       }
     }

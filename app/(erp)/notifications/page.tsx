@@ -355,62 +355,65 @@ function NotifRow({
   return (
     <div
       className={cn(
-        "group flex cursor-default items-start gap-3 px-4 py-3 transition-colors",
-        !n.isRead && "bg-primary/[0.035] hover:bg-primary/6",
-        n.isRead && "hover:bg-muted/40",
-        muted && "opacity-60 hover:opacity-100"
+        "group relative flex cursor-default items-start gap-3.5 px-4 py-3.5 transition-colors",
+        !n.isRead && "bg-primary/[0.04] hover:bg-primary/[0.07] border-l-2 border-l-primary",
+        n.isRead && "border-l-2 border-l-transparent hover:bg-muted/40",
+        muted && "hover:opacity-100"
       )}
       onClick={handleRowClick}
     >
-      {/* Unread dot */}
-      <div className="mt-2.5 flex w-2 shrink-0 justify-center">
-        {!n.isRead && (
-          <span className={cn("size-2 rounded-full", meta.accent)} />
-        )}
-      </div>
-
       {/* Type icon */}
       <div
         className={cn(
-          "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full",
+          "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border",
           iconBgClass,
-          iconColorClass
+          iconColorClass,
+          !n.isRead ? "border-current/20" : "border-border/60"
         )}
       >
         {n.type === "SO_NEEDS_RESTOCK" ? (
-          <Package size={14} weight="bold" />
+          <Package size={16} weight="bold" />
         ) : n.type === "SO_RESTOCK_COMPLETE" ? (
-          <CheckCircle size={14} weight="bold" />
+          <CheckCircle size={16} weight="bold" />
         ) : n.type === "LOW_STOCK" ? (
-          <Warning size={14} weight="bold" />
+          <Warning size={16} weight="bold" />
         ) : n.type === "SO_NUDGE_RESTOCK" ? (
-          <Bell size={14} weight="bold" />
+          <Bell size={16} weight="bold" />
         ) : (
-          <Info size={14} weight="bold" />
+          <Info size={16} weight="bold" />
         )}
       </div>
 
       {/* Body */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-semibold text-muted-foreground">
+            <span className={cn(
+              "text-[11px] font-bold tracking-wide uppercase",
+              !n.isRead ? iconColorClass : "text-muted-foreground"
+            )}>
               {meta.label}
             </span>
             {n.count > 1 && (
-              <span className="rounded-full bg-muted/80 px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
+              <span className="rounded-full bg-muted px-1.5 py-px text-[9px] font-bold text-muted-foreground">
                 ×{n.count}
               </span>
             )}
+            {!n.isRead && (
+              <span className={cn("size-1.5 rounded-full animate-pulse", meta.accent)} />
+            )}
           </div>
           <span
-            className="shrink-0 cursor-default text-[10px] text-muted-foreground tabular-nums"
+            className="shrink-0 text-[10px] text-muted-foreground tabular-nums"
             title={formatNotificationTimeFull(n.createdAt)}
           >
             {formatNotificationTime(n.createdAt)}
           </span>
         </div>
-        <p className="mt-0.5 text-sm leading-snug font-medium text-foreground">
+        <p className={cn(
+          "mt-1 text-sm leading-snug",
+          !n.isRead ? "font-semibold text-foreground" : "font-medium text-foreground/80"
+        )}>
           {href && n.entityId ? (
             <>
               {summary
@@ -441,17 +444,14 @@ function NotifRow({
         )}
       </div>
 
-      {/* Actions — visible at low opacity, full on hover */}
-      <div className="flex shrink-0 items-center gap-1 opacity-30 transition-opacity group-hover:opacity-100">
+      {/* Actions */}
+      <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         {!n.isRead && onMarkRead && (
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation()
-              onMarkRead()
-            }}
+            onClick={(e) => { e.stopPropagation(); onMarkRead() }}
             title="Mark as read"
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <Check size={13} />
           </button>
@@ -461,7 +461,7 @@ function NotifRow({
             href={href}
             onClick={(e) => e.stopPropagation()}
             title="Open order"
-            className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <ArrowRight size={13} />
           </Link>

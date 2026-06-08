@@ -22,6 +22,8 @@ import {
 import { Eye, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
+import { Plus } from "@phosphor-icons/react"
 
 function pageTitle(pathname: string): string {
   if (pathname === "/orders/new") return "New Sales Order"
@@ -124,9 +126,10 @@ function ColorBlindPicker({ mode, onChange }: { mode: string; onChange: (v: stri
 }
 
 function ERPHeader() {
-  const { user, loading } = useUser()
+  const { user, loading, isSales, isAdmin } = useUser()
   const pathname = usePathname()
   const initials = userInitials(user?.name)
+  const canCreateOrder = (isSales || isAdmin) && pathname === "/dashboard"
 
   const [colorBlindMode, setColorBlindMode] = useState<string>("none")
 
@@ -152,6 +155,15 @@ function ERPHeader() {
       </div>
 
       <div className="flex items-center gap-3 px-4">
+        {canCreateOrder && (
+          <Button asChild size="sm" className="gap-1.5 h-8 text-xs font-semibold">
+            <Link href="/orders/new">
+              <Plus className="h-3.5 w-3.5" weight="bold" />
+              <span className="hidden sm:inline">New Order</span>
+            </Link>
+          </Button>
+        )}
+
         <ColorBlindPicker mode={colorBlindMode} onChange={setColorBlindMode} />
 
         <NotificationBell />
