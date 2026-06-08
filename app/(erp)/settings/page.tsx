@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { useState } from "react"
 import { useFetch } from "@/hooks/use-api"
 import { useUser } from "@/hooks/use-user"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -8,9 +9,28 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Gear,
   User,
+  UserPlus,
+  PencilSimple,
+  Prohibit,
   ShieldCheck,
   Clock,
   ArrowDown,
@@ -269,8 +289,191 @@ function InventoryWorkspace() {
   )
 }
 
+const ROLES: UserRole[] = ["Admin", "Sales Executive", "Inventory Manager"]
+
+interface UserFormState {
+  name: string
+  email: string
+  role: UserRole
+  password: string
+}
+
+function AddUserDialog({ onCreated }: { onCreated: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+  const [form, setForm] = useState<UserFormState>({ name: "", email: "", role: "Sales Executive", password: "" })
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setError("")
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? "Failed to create user"); return }
+      setOpen(false)
+      setForm({ name: "", email: "", role: "Sales Executive", password: "" })
+      onCreated()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <Button size="sm" className="gap-1.5" onClick={() => setOpen(true)}>
+        <UserPlus size={15} /> Add user
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add new user</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Full name</Label>
+              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Rahul Verma" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="rahul@shirtco.in" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v as UserRole }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Password</Label>
+              <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Min. 8 characters" required />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? "Creating…" : "Create user"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function EditUserDialog({ user, onUpdated, currentUserId }: { user: UserType; onUpdated: () => void; currentUserId: string }) {
+  const [open, setOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+  const [form, setForm] = useState({ name: user.name, email: user.email, role: user.role, password: "" })
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setError("")
+    try {
+      const body: Record<string, string> = { name: form.name, email: form.email, role: form.role }
+      if (form.password) body.password = form.password
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? "Failed to update user"); return }
+      setOpen(false)
+      onUpdated()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <Button size="icon" variant="ghost" className="size-7 text-muted-foreground hover:text-foreground" onClick={() => setOpen(true)}>
+        <PencilSimple size={14} />
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit user — {user.name}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+            <div className="space-y-1.5">
+              <Label>Full name</Label>
+              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v as UserRole }))} disabled={user.id === currentUserId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {user.id === currentUserId && <p className="text-xs text-muted-foreground">You cannot change your own role.</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label>New password <span className="text-muted-foreground">(leave blank to keep current)</span></Label>
+              <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Min. 8 characters" />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save changes"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+function DeactivateButton({ user, onUpdated, currentUserId }: { user: UserType; onUpdated: () => void; currentUserId: string }) {
+  const [saving, setSaving] = useState(false)
+
+  async function toggle() {
+    setSaving(true)
+    const newStatus = user.status === "Active" ? "Inactive" : "Active"
+    await fetch(`/api/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    })
+    setSaving(false)
+    onUpdated()
+  }
+
+  if (user.id === currentUserId) return null
+
+  return (
+    <Button
+      size="icon"
+      variant="ghost"
+      className={`size-7 ${user.status === "Active" ? "text-muted-foreground hover:text-destructive" : "text-muted-foreground hover:text-emerald-600"}`}
+      onClick={toggle}
+      disabled={saving}
+      title={user.status === "Active" ? "Deactivate user" : "Reactivate user"}
+    >
+      {saving ? <Spinner className="animate-spin" size={14} /> : <Prohibit size={14} />}
+    </Button>
+  )
+}
+
 function AdminUsersPanel() {
-  const { data: users, loading } = useFetch<UserType[]>("/api/users")
+  const { user: currentUser } = useUser()
+  const { data: users, loading, refetch } = useFetch<UserType[]>("/api/users")
   const allUsers = users ?? []
   const roleGroups = (Object.keys(ROLE_PERMISSIONS) as UserRole[]).map((role) => ({
     role,
@@ -280,9 +483,12 @@ function AdminUsersPanel() {
   return (
     <div className="space-y-6">
       <div className="rounded-xl border bg-card overflow-hidden">
-        <div className="px-5 py-4 border-b bg-muted/20 flex items-center gap-2">
-          <User size={16} weight="fill" className="text-primary" />
-          <h2 className="font-heading font-semibold">Users ({allUsers.length})</h2>
+        <div className="px-5 py-4 border-b bg-muted/20 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <User size={16} weight="fill" className="text-primary" />
+            <h2 className="font-heading font-semibold">Users ({allUsers.length})</h2>
+          </div>
+          <AddUserDialog onCreated={refetch} />
         </div>
         {loading ? (
           <div className="p-8 text-center text-muted-foreground flex items-center justify-center gap-2">
@@ -297,6 +503,7 @@ function AdminUsersPanel() {
                 <TableHead className="font-semibold text-xs">Role</TableHead>
                 <TableHead className="font-semibold text-xs">Status</TableHead>
                 <TableHead className="font-semibold text-xs">Last login</TableHead>
+                <TableHead className="font-semibold text-xs w-16"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -312,7 +519,7 @@ function AdminUsersPanel() {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{u.email}</TableCell>
                   <TableCell>
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${ROLE_COLOR[u.role]}`}>
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${ROLE_COLOR[u.role] ?? "bg-muted"}`}>
                       {u.role}
                     </span>
                   </TableCell>
@@ -327,6 +534,12 @@ function AdminUsersPanel() {
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {u.lastLogin ? formatDate(u.lastLogin) : "Never"}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-0.5">
+                      <EditUserDialog user={u} onUpdated={refetch} currentUserId={currentUser?.id ?? ""} />
+                      <DeactivateButton user={u} onUpdated={refetch} currentUserId={currentUser?.id ?? ""} />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
