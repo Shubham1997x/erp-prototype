@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { getSupabase } from "@/lib/supabase"
 import { requireAuth } from "@/lib/auth"
 import { enrichOrder } from "@/lib/sales-order-enrich"
 
@@ -9,12 +9,16 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   try {
     await requireAuth(req)
     const { id } = await params
-    const db = getDb()
 
-    const order = db.prepare("SELECT * FROM sales_orders WHERE id = ?").get(id) as any
+    const { data: order } = await getSupabase()
+      .from("sales_orders")
+      .select()
+      .eq("id", id)
+      .single()
+
     if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-    return NextResponse.json(enrichOrder(db, order as Record<string, unknown>))
+    return NextResponse.json(await enrichOrder(order as Record<string, unknown>))
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 401 })
   }

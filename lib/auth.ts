@@ -1,5 +1,5 @@
 import { cookies } from "next/headers"
-import { getDb } from "./db"
+import { getSupabase } from "./supabase"
 import type { UserRole } from "./types"
 
 export interface AuthUser {
@@ -15,42 +15,50 @@ export interface AuthUser {
 const SESSION_COOKIE = "erp_session"
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000 // 8 hours
 
-// ─── Resolve the current user from session cookie OR dev headers ───────────────
 export async function getAuth(req: Request): Promise<AuthUser | null> {
-  // 1. Try httpOnly session cookie (production auth)
   const cookieStore = await cookies()
   const sessionId = cookieStore.get(SESSION_COOKIE)?.value
 
   if (sessionId) {
-    const db = getDb()
-    const session = db.prepare(`
-      SELECT s.user_id, u.name, u.email, u.role, u.status
-      FROM sessions s
-      JOIN users u ON u.id = s.user_id
-      WHERE s.id = ? AND s.expires_at > datetime('now') AND u.status = 'Active'
-    `).get(sessionId) as { user_id: string; name: string; email: string; role: UserRole; status: string } | undefined
+    const supabase = getSupabase()
+    const now = new Date().toISOString()
+
+    const { data: session } = await supabase
+      .from("sessions")
+      .select("user_id")
+      .eq("id", sessionId)
+      .gt("expires_at", now)
+      .single()
 
     if (session) {
-      // Extend session on activity
-      const newExpiry = new Date(Date.now() + SESSION_TTL_MS).toISOString()
-      db.prepare("UPDATE sessions SET expires_at=? WHERE id=?").run(newExpiry, sessionId)
-      return buildAuthUser(session.user_id, session.name, session.email, session.role)
+      const { data: user } = await supabase
+        .from("users")
+        .select("id, name, email, role")
+        .eq("id", session.user_id)
+        .eq("status", "Active")
+        .single()
+
+      if (user) {
+        const newExpiry = new Date(Date.now() + SESSION_TTL_MS).toISOString()
+        await supabase.from("sessions").update({ expires_at: newExpiry }).eq("id", sessionId)
+        return buildAuthUser(user.id, user.name, user.email, user.role as UserRole)
+      }
     }
   }
 
-  // 2. Fall back to dev headers (X-User-Id / X-User-Role) when no session exists.
-  //    These are validated against the DB so they can't be spoofed with a fake role.
+  // Dev header fallback — validated against DB, not blindly trusted
   const headerId = req.headers.get("X-User-Id")
   const headerRole = req.headers.get("X-User-Role") as UserRole | null
 
   if (headerId && headerRole) {
-    const db = getDb()
-    const u = db.prepare("SELECT id, name, email, role FROM users WHERE id=? AND status='Active'").get(headerId) as
-      | { id: string; name: string; email: string; role: UserRole }
-      | undefined
-    // Only trust the header role if it matches what's in the DB
+    const { data: u } = await getSupabase()
+      .from("users")
+      .select("id, name, email, role")
+      .eq("id", headerId)
+      .eq("status", "Active")
+      .single()
     if (u && u.role === headerRole) {
-      return buildAuthUser(u.id, u.name, u.email, u.role)
+      return buildAuthUser(u.id, u.name, u.email, u.role as UserRole)
     }
   }
 
@@ -59,14 +67,16 @@ export async function getAuth(req: Request): Promise<AuthUser | null> {
 
 function buildAuthUser(id: string, name: string, email: string, role: UserRole): AuthUser {
   return {
-    id, name, email, role,
-    isAdmin:      role === "Admin",
-    isSales:      role === "Sales Executive" || role === "Admin",
-    isInventory:  role === "Inventory Manager" || role === "Admin",
+    id,
+    name,
+    email,
+    role,
+    isAdmin: role === "Admin",
+    isSales: role === "Sales Executive" || role === "Admin",
+    isInventory: role === "Inventory Manager" || role === "Admin",
   }
 }
 
-// ─── Guards ──────────────────────────────────────────────────────────────────
 export async function requireAuth(req: Request): Promise<AuthUser> {
   const auth = await getAuth(req)
   if (!auth) throw new Error("Unauthorized: Please log in")
@@ -82,33 +92,27 @@ export async function requireRole(req: Request, allowedRoles: UserRole[]): Promi
 }
 
 export async function requireNotViewer(req: Request): Promise<AuthUser> {
-  const auth = await requireAuth(req)
-  // Viewer role is removed, everyone is authorized beyond basic auth
-  return auth
+  return await requireAuth(req)
 }
 
-// ─── Session management ───────────────────────────────────────────────────────
-export function createSession(userId: string, ipAddress?: string): string {
-  const db = getDb()
-  const id = `sess-${require("crypto").randomUUID().replace(/-/g, "")}`
+export async function createSession(userId: string, ipAddress?: string): Promise<string> {
+  const id = `sess-${crypto.randomUUID().replace(/-/g, "")}`
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString()
-  db.prepare(`
-    INSERT INTO sessions (id, user_id, expires_at, ip_address) VALUES (?, ?, ?, ?)
-  `).run(id, userId, expiresAt, ipAddress ?? null)
+  await getSupabase()
+    .from("sessions")
+    .insert({ id, user_id: userId, expires_at: expiresAt, ip_address: ipAddress ?? null })
   return id
 }
 
-export function invalidateSession(sessionId: string) {
-  const db = getDb()
-  db.prepare("DELETE FROM sessions WHERE id=?").run(sessionId)
+export async function invalidateSession(sessionId: string): Promise<void> {
+  await getSupabase().from("sessions").delete().eq("id", sessionId)
 }
 
-export function invalidateAllUserSessions(userId: string) {
-  const db = getDb()
-  db.prepare("DELETE FROM sessions WHERE user_id=?").run(userId)
+export async function invalidateAllUserSessions(userId: string): Promise<void> {
+  await getSupabase().from("sessions").delete().eq("user_id", userId)
 }
 
-export function getSessionCookieOptions(expires: boolean = false) {
+export function getSessionCookieOptions(expires = false) {
   return {
     name: SESSION_COOKIE,
     httpOnly: true,

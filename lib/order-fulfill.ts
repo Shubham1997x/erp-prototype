@@ -1,5 +1,5 @@
-import type Database from "better-sqlite3"
-import { writeAuditLog, createNotification } from "@/lib/audit"
+import { getSupabase } from "./supabase"
+import { writeAuditLog, createNotification } from "./audit"
 
 export type StockShortage = {
   productId: string
@@ -15,21 +15,27 @@ export type FulfillOrderResult = {
   fulfilled: boolean
 }
 
-function getOrderLines(db: Database.Database, orderId: string) {
-  return db.prepare("SELECT * FROM sales_order_lines WHERE order_id=?").all(orderId) as
-    { product_id: string; qty: number }[]
+async function getOrderLines(orderId: string) {
+  const { data } = await getSupabase()
+    .from("sales_order_lines")
+    .select("product_id, qty")
+    .eq("order_id", orderId)
+  return data ?? []
 }
 
-export function getOrderStockShortages(db: Database.Database, orderId: string): StockShortage[] {
-  const lines = getOrderLines(db, orderId)
+export async function getOrderStockShortages(orderId: string): Promise<StockShortage[]> {
+  const lines = await getOrderLines(orderId)
   const shortages: StockShortage[] = []
+  const supabase = getSupabase()
 
   for (const line of lines) {
-    const product = db.prepare("SELECT id, name, current_stock FROM products WHERE id=?").get(line.product_id) as
-      { id: string; name: string; current_stock: number } | undefined
+    const { data: product } = await supabase
+      .from("products")
+      .select("id, name, current_stock")
+      .eq("id", line.product_id)
+      .single()
 
     if (!product) throw new Error(`Product not found: ${line.product_id}`)
-
     if (product.current_stock < line.qty) {
       shortages.push({
         productId: product.id,
@@ -43,17 +49,21 @@ export function getOrderStockShortages(db: Database.Database, orderId: string): 
   return shortages
 }
 
-export function fulfillSalesOrder(
-  db: Database.Database,
-  opts: { orderId: string; userId: string; now: string }
-): FulfillOrderResult {
+export async function fulfillSalesOrder(opts: {
+  orderId: string
+  userId: string
+  now: string
+}): Promise<FulfillOrderResult> {
   const { orderId, userId, now } = opts
+  const supabase = getSupabase()
 
-  const order = db.prepare("SELECT * FROM sales_orders WHERE id=?").get(orderId) as
-    | Record<string, unknown>
-    | undefined
+  const { data: order } = await supabase
+    .from("sales_orders")
+    .select()
+    .eq("id", orderId)
+    .single()
+
   if (!order) throw new Error("Sales order not found")
-
   const priorStatus = order.status as string
 
   if (priorStatus !== "NEEDS_RESTOCK" && priorStatus !== "INVENTORY_CHECK") {
@@ -65,13 +75,14 @@ export function fulfillSalesOrder(
     }
   }
 
-  const shortages = getOrderStockShortages(db, orderId)
+  const shortages = await getOrderStockShortages(orderId)
 
   if (shortages.length > 0) {
-    db.prepare("UPDATE sales_orders SET status='NEEDS_RESTOCK', updated_at=?, updated_by=? WHERE id=?")
-      .run(now, userId, orderId)
-
-    writeAuditLog(db, {
+    await supabase
+      .from("sales_orders")
+      .update({ status: "NEEDS_RESTOCK", updated_at: now, updated_by: userId })
+      .eq("id", orderId)
+    await writeAuditLog({
       userId,
       action: "SO_NEEDS_RESTOCK",
       entityType: "sales_order",
@@ -79,26 +90,39 @@ export function fulfillSalesOrder(
       before: { status: priorStatus },
       after: { status: "NEEDS_RESTOCK", shortages },
     })
-
     return { orderId, status: "NEEDS_RESTOCK", shortages, fulfilled: false }
   }
 
-  const lines = getOrderLines(db, orderId)
+  const lines = await getOrderLines(orderId)
 
   for (const line of lines) {
-    db.prepare("UPDATE products SET current_stock = MAX(0, current_stock - ?) WHERE id=?")
-      .run(line.qty, line.product_id)
+    const { data: product } = await supabase
+      .from("products")
+      .select("current_stock")
+      .eq("id", line.product_id)
+      .single()
 
-    db.prepare(`
-      INSERT INTO stock_movements (entity_type, entity_id, delta, reason, reference_type, reference_id, created_by, created_at)
-      VALUES ('product', ?, ?, 'Order fulfilled', 'sales_order', ?, ?, ?)
-    `).run(line.product_id, -line.qty, orderId, userId, now)
+    const newStock = Math.max(0, (product?.current_stock ?? 0) - line.qty)
+    await supabase.from("products").update({ current_stock: newStock }).eq("id", line.product_id)
+
+    await supabase.from("stock_movements").insert({
+      entity_type: "product",
+      entity_id: line.product_id,
+      delta: -line.qty,
+      reason: "Order fulfilled",
+      reference_type: "sales_order",
+      reference_id: orderId,
+      created_by: userId,
+      created_at: now,
+    })
   }
 
-  db.prepare("UPDATE sales_orders SET status='READY_TO_SHIP', updated_at=?, updated_by=? WHERE id=?")
-    .run(now, userId, orderId)
+  await supabase
+    .from("sales_orders")
+    .update({ status: "READY_TO_SHIP", updated_at: now, updated_by: userId })
+    .eq("id", orderId)
 
-  writeAuditLog(db, {
+  await writeAuditLog({
     userId,
     action: "SO_FULFILLED_TO_SHIPPING",
     entityType: "sales_order",
@@ -111,39 +135,49 @@ export function fulfillSalesOrder(
     const createdBy = order.created_by as string | undefined
     const notif = {
       type: "SO_RESTOCK_COMPLETE",
-      title: `Order ${(order.order_number as string | undefined) ?? orderId} restocked — ready to ship`,
-      message: `Inventory has restocked order ${(order.order_number as string | undefined) ?? orderId}. Stock is available; you can proceed with shipping.`,
+      title: `Order ${order.order_number ?? orderId} restocked — ready to ship`,
+      message: `Inventory has restocked order ${order.order_number ?? orderId}. Stock is available; you can proceed with shipping.`,
       entityType: "sales_order",
       entityId: orderId,
     }
     if (createdBy?.startsWith("usr-")) {
-      createNotification(db, { ...notif, userId: createdBy })
+      await createNotification({ ...notif, userId: createdBy })
     } else {
-      createNotification(db, { ...notif, role: "Sales Executive" })
+      await createNotification({ ...notif, role: "Sales Executive" })
     }
   }
 
   return { orderId, status: "READY_TO_SHIP", shortages: [], fulfilled: true }
 }
 
-/** After product stock increases, try to clear waiting orders (oldest first). */
-export function tryAutoFulfillOrdersForProduct(
-  db: Database.Database,
-  opts: { productId: string; userId: string; now: string }
-): FulfillOrderResult[] {
+export async function tryAutoFulfillOrdersForProduct(opts: {
+  productId: string
+  userId: string
+  now: string
+}): Promise<FulfillOrderResult[]> {
   const { productId, userId, now } = opts
+  const supabase = getSupabase()
 
-  const waiting = db.prepare(`
-    SELECT DISTINCT so.id
-    FROM sales_orders so
-    INNER JOIN sales_order_lines sol ON sol.order_id = so.id
-    WHERE so.status = 'NEEDS_RESTOCK' AND sol.product_id = ?
-    ORDER BY so.updated_at ASC, so.created_at ASC
-  `).all(productId) as { id: string }[]
+  // Get order IDs that include this product
+  const { data: lines } = await supabase
+    .from("sales_order_lines")
+    .select("order_id")
+    .eq("product_id", productId)
+
+  const orderIds = [...new Set((lines ?? []).map((l) => l.order_id))]
+  if (orderIds.length === 0) return []
+
+  const { data: waiting } = await supabase
+    .from("sales_orders")
+    .select("id")
+    .eq("status", "NEEDS_RESTOCK")
+    .in("id", orderIds)
+    .order("updated_at", { ascending: true })
+    .order("created_at", { ascending: true })
 
   const results: FulfillOrderResult[] = []
-  for (const { id } of waiting) {
-    results.push(fulfillSalesOrder(db, { orderId: id, userId, now }))
+  for (const { id } of waiting ?? []) {
+    results.push(await fulfillSalesOrder({ orderId: id, userId, now }))
   }
   return results
 }

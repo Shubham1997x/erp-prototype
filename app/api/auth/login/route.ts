@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { getSupabase } from "@/lib/supabase"
 import { verifyPassword } from "@/lib/core"
 import { createSession, getSessionCookieOptions } from "@/lib/auth"
 import { writeAuditLog } from "@/lib/audit"
@@ -13,21 +13,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Email and password are required" }, { status: 400 })
   }
 
-  const db = getDb()
-  const user = db.prepare("SELECT * FROM users WHERE email=? AND status='Active'").get(email) as
-    | { id: string; name: string; email: string; role: string; password_hash: string | null }
-    | undefined
+  const supabase = getSupabase()
+  const { data: user } = await supabase
+    .from("users")
+    .select("id, name, email, role, password_hash")
+    .eq("email", email)
+    .eq("status", "Active")
+    .single()
 
   if (!user || !user.password_hash || !verifyPassword(password, user.password_hash)) {
     return NextResponse.json({ error: "Invalid email or password" }, { status: 401 })
   }
 
   const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? undefined
-  const sessionId = createSession(user.id, ip)
+  const sessionId = await createSession(user.id, ip)
 
-  db.prepare("UPDATE users SET last_login=datetime('now') WHERE id=?").run(user.id)
+  await supabase.from("users").update({ last_login: new Date().toISOString() }).eq("id", user.id)
 
-  writeAuditLog(db, {
+  await writeAuditLog({
     userId: user.id,
     action: "LOGIN",
     entityType: "user",

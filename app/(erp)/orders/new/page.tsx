@@ -305,10 +305,9 @@ export default function NewOrderPage() {
                       {/* Top row: Product Dropdown Selection & Image */}
                       <div className="flex items-start gap-3.5">
                         <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border bg-muted/30 flex items-center justify-center relative">
-                          {prod?.imageUrl ? (
-                            <img src={prod.imageUrl} alt={prod.name} className="h-full w-full object-cover" />
-                          ) : (
-                            <Package className="size-5 text-muted-foreground/30" />
+                          <Package className="size-5 text-muted-foreground/30" />
+                          {prod?.imageUrl && (
+                            <img src={prod.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display = "none" }} />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -511,10 +510,9 @@ export default function NewOrderPage() {
                       >
                         <div className="space-y-1">
                           <div className="h-16 w-full bg-muted/30 rounded overflow-hidden border border-border/30 flex items-center justify-center relative">
-                            {p.imageUrl ? (
-                              <img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform" />
-                            ) : (
-                              <TShirt className="size-5 text-muted-foreground/30" />
+                            <TShirt className="size-5 text-muted-foreground/30" />
+                            {p.imageUrl && (
+                              <img src={p.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover group-hover:scale-105 transition-transform" onError={(e) => { e.currentTarget.style.display = "none" }} />
                             )}
                             <span className={cn(
                               "absolute bottom-0.5 right-0.5 px-1 rounded text-[8px] font-bold shadow-sm",

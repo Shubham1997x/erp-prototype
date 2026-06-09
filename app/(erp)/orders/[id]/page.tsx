@@ -592,13 +592,12 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                   <div className="space-y-3">
                     {currentShortages.map((s, idx) => (
                       <div key={idx} className="flex items-center gap-4 bg-muted/20 hover:bg-muted/30 transition-colors p-3 rounded-xl border border-border/60 shadow-sm">
-                        {s.image ? (
-                          <img src={s.image} alt={s.name} className="w-8 h-8 rounded object-cover shrink-0 border" />
-                        ) : (
-                          <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0">
-                            <Package size={14} className="text-muted-foreground" />
-                          </div>
-                        )}
+                        <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0 relative overflow-hidden border">
+                          <Package size={14} className="text-muted-foreground/50" />
+                          {s.image && (
+                            <img src={s.image} alt="" className="absolute inset-0 w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none" }} />
+                          )}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <div className="text-[15px] font-semibold truncate text-foreground leading-tight mb-1">{s.name}</div>
                           <div className="text-[11px] font-mono text-muted-foreground">{s.sku}</div>
@@ -779,11 +778,10 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 <TableRow key={i} className="hover:bg-muted/20">
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-md border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden">
-                        {p?.imageUrl ? (
-                          <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <Package size={20} className="text-muted-foreground/50" />
+                      <div className="w-10 h-10 rounded-md border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden relative">
+                        <Package size={20} className="text-muted-foreground/40" />
+                        {p?.imageUrl && (
+                          <img src={p.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none" }} />
                         )}
                       </div>
                       <div className="font-semibold text-foreground">{p?.name || "Unknown Product"}</div>

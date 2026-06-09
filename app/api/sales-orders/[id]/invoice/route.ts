@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { getSupabase } from "@/lib/supabase"
 import { requireAuth } from "@/lib/auth"
 import {
   buildInvoiceHtml,
@@ -19,11 +19,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     const { id } = await params
-    const db = getDb()
+    const supabase = getSupabase()
 
-    const order = db.prepare("SELECT * FROM sales_orders WHERE id = ?").get(id) as
-      | Record<string, unknown>
-      | undefined
+    const { data: order } = await supabase.from("sales_orders").select().eq("id", id).single()
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 })
 
     const status = String(order.status)
@@ -34,28 +32,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       )
     }
 
-    const customer = db.prepare("SELECT * FROM customers WHERE id = ?").get(order.customer_id) as
-      | Record<string, unknown>
-      | undefined
+    const { data: customer } = await supabase
+      .from("customers")
+      .select()
+      .eq("id", order.customer_id)
+      .single()
 
-    const lineRows = db
-      .prepare(
-        `SELECT sol.*, p.name as product_name, p.sku
-         FROM sales_order_lines sol
-         LEFT JOIN products p ON p.id = sol.product_id
-         WHERE sol.order_id = ?`
-      )
-      .all(id) as Record<string, unknown>[]
+    const { data: lineRows } = await supabase
+      .from("sales_order_lines")
+      .select("*, products(name, sku)")
+      .eq("order_id", id)
 
-    const lines = lineRows.map((l) => {
+    const lines = (lineRows ?? []).map((l: any) => {
       const qty = Number(l.qty)
       const unitPrice = Number(l.unit_price)
       const gstRate = Number(l.gst_rate ?? 0)
       const lineTotal = qty * unitPrice
       const lineTax = Math.round(lineTotal * gstRate) / 100
       return {
-        description: String(l.product_name ?? l.product_id),
-        sku: l.sku ? String(l.sku) : undefined,
+        description: String(l.products?.name ?? l.product_id),
+        sku: l.products?.sku ? String(l.products.sku) : undefined,
         qty,
         unitPrice,
         gstRate,
@@ -69,10 +65,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     const total = subtotal + taxAmount
 
     const issueDate =
-      (order.actual_delivery_date as string) ||
-      (order.updated_at as string) ||
-      new Date().toISOString()
-
+      order.actual_delivery_date || order.updated_at || new Date().toISOString()
     const paymentTerms = customer ? String(customer.payment_terms ?? "") : ""
     const dueDate = dueDateFromIssue(issueDate, paymentTerms)
 

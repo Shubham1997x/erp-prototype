@@ -510,7 +510,7 @@ export default function OrdersPage() {
                                 )}
                                 style={{ zIndex: 50 - idx, "--stack-x": `${idx * 5}px`, "--hover-x": `${idx * 24}px` } as React.CSSProperties}
                               >
-                                <img src={img} alt="Product" className="h-full w-full object-cover" />
+                                <img src={img} alt="" className="h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display = "none" }} />
                               </div>
                             ))}
                             {uniqueImages.length > 5 && (

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic"
 export async function POST() {
   const cookieStore = await cookies()
   const sessionId = cookieStore.get("erp_session")?.value
-  if (sessionId) invalidateSession(sessionId)
+  if (sessionId) await invalidateSession(sessionId)
 
   const res = NextResponse.json({ ok: true })
   res.cookies.set({ ...getSessionCookieOptions(true), value: "" })

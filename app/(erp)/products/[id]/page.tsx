@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useFetch, apiPost, apiPatch } from "@/hooks/use-api"
 import { useUser } from "@/hooks/use-user"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Package, ArrowLeft, Warning, CheckCircle, Spinner, ArrowUp, PencilSimple } from "@phosphor-icons/react"
+import { Package, ArrowLeft, Warning, CheckCircle, Spinner, ArrowUp, PencilSimple, Camera } from "@phosphor-icons/react"
 import type { Product } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -43,6 +43,7 @@ export default function ProductDetailPage() {
   const [stockInvoiceDetails, setStockInvoiceDetails] = useState("")
   const [saving, setSaving] = useState(false)
   const [uploadingImage, setUploadingImage] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   function openEdit() {
     if (!product) return
@@ -206,19 +207,15 @@ export default function ProductDetailPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-1">
           <div className="aspect-square rounded-2xl border bg-card shadow-sm overflow-hidden flex items-center justify-center p-2 relative">
-            {product.imageUrl ? (
+            <Package size={80} className="text-muted-foreground/25" />
+            {product.imageUrl && (
               <img
                 src={product.imageUrl}
-                alt={product.name}
-                className="w-full h-full object-cover rounded-xl"
-                onError={(e) => {
-                  const t = e.currentTarget
-                  t.style.display = "none"
-                  t.parentElement?.querySelector(".img-fallback")?.removeAttribute("hidden")
-                }}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover rounded-xl"
+                onError={(e) => { e.currentTarget.style.display = "none" }}
               />
-            ) : null}
-            <Package size={80} className="img-fallback text-muted-foreground/30" hidden={!!product.imageUrl} />
+            )}
           </div>
         </div>
 
@@ -361,13 +358,47 @@ export default function ProductDetailPage() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Image</label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Product Photo</label>
+              <div className="flex items-center gap-3">
+                <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border bg-muted/40 flex items-center justify-center">
+                  <Package size={24} className="text-muted-foreground/30" />
+                  {editForm.imageUrl && (
+                    <img src={editForm.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" onError={(e) => { e.currentTarget.style.display = "none" }} />
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-2"
+                    disabled={uploadingImage}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {uploadingImage ? <Spinner size={14} className="animate-spin" /> : <Camera size={14} />}
+                    {uploadingImage ? "Uploading…" : "Select photo"}
+                  </Button>
+                  {editForm.imageUrl && (
+                    <button
+                      type="button"
+                      className="text-[11px] text-muted-foreground hover:text-destructive underline underline-offset-2 text-left"
+                      onClick={() => setEditForm((f) => ({ ...f, imageUrl: "" }))}
+                    >
+                      Remove photo
+                    </button>
+                  )}
+                </div>
+              </div>
               <input
+                ref={fileInputRef}
                 type="file"
                 accept="image/*"
                 onChange={handleEditImageUpload}
                 disabled={uploadingImage}
-                className="w-full text-xs"
+                className="hidden"
+                style={{ display: "none" }}
+                tabIndex={-1}
+                aria-hidden
               />
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { getDb } from "@/lib/db"
+import { getSupabase } from "@/lib/supabase"
 import { NextResponse } from "next/server"
 import { requireNotViewer } from "@/lib/auth"
 import { writeAuditLog } from "@/lib/audit"
@@ -18,7 +18,7 @@ function mapProduct(r: Record<string, unknown>) {
     unitCost: r.unit_cost,
     standardCost: r.standard_cost,
     category: r.category,
-    isActive: r.is_active === 1,
+    isActive: r.is_active === 1 || r.is_active === true,
     imageUrl: r.image_url,
   }
 }
@@ -26,16 +26,19 @@ function mapProduct(r: Record<string, unknown>) {
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const db = getDb()
+    const { data: product } = await getSupabase()
+      .from("products")
+      .select()
+      .eq("id", id)
+      .single()
 
-    const product = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as
-      | Record<string, unknown>
-      | undefined
     if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 })
-
-    return NextResponse.json(mapProduct(product))
+    return NextResponse.json(mapProduct(product as Record<string, unknown>))
   } catch (error: unknown) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Error" }, { status: 500 })
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Error" },
+      { status: 500 }
+    )
   }
 }
 
@@ -52,13 +55,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const { id } = await params
-  const db = getDb()
+  const supabase = getSupabase()
 
-  const before = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as Record<string, unknown> | undefined
+  const { data: before } = await supabase.from("products").select().eq("id", id).single()
   if (!before) return NextResponse.json({ error: "Product not found" }, { status: 404 })
 
   const body = await req.json()
-  const now = new Date().toISOString()
 
   if (body.name !== undefined && !String(body.name).trim()) {
     return NextResponse.json({ error: "Product name is required" }, { status: 400 })
@@ -67,34 +69,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "Price must be greater than 0" }, { status: 400 })
   }
 
-  const name = body.name !== undefined ? String(body.name).trim() : before.name
-  const sku = body.sku !== undefined ? String(body.sku).trim() || before.sku : before.sku
-  const unitOfMeasure =
-    body.unitOfMeasure !== undefined ? String(body.unitOfMeasure) : before.unit_of_measure
-  const price = body.price !== undefined ? Number(body.price) : before.price
-  const imageUrl = body.imageUrl !== undefined ? body.imageUrl : before.image_url
+  const update: Record<string, unknown> = {
+    name: body.name !== undefined ? String(body.name).trim() : before.name,
+    sku: body.sku !== undefined ? String(body.sku).trim() || before.sku : before.sku,
+    unit_of_measure: body.unitOfMeasure !== undefined ? String(body.unitOfMeasure) : before.unit_of_measure,
+    price: body.price !== undefined ? Number(body.price) : before.price,
+    image_url: body.imageUrl !== undefined ? body.imageUrl : before.image_url,
+    category: body.category !== undefined ? body.category || null : before.category,
+    standard_cost: body.standardCost !== undefined ? Number(body.standardCost) || null : before.standard_cost,
+    unit_cost: body.unitCost !== undefined ? Number(body.unitCost) || null : before.unit_cost,
+    is_active: body.isActive !== undefined ? (body.isActive ? 1 : 0) : before.is_active,
+  }
 
-  const category = body.category !== undefined ? (body.category || null) : before.category
-  const standardCost = body.standardCost !== undefined ? (Number(body.standardCost) || null) : before.standard_cost
-  const unitCost = body.unitCost !== undefined ? (Number(body.unitCost) || null) : before.unit_cost
-  const isActive = body.isActive !== undefined ? (body.isActive ? 1 : 0) : before.is_active
+  await supabase.from("products").update(update).eq("id", id)
 
-  db.prepare(`
-    UPDATE products
-    SET name = ?, sku = ?, unit_of_measure = ?, price = ?, image_url = ?, category = ?, standard_cost = ?, unit_cost = ?, is_active = ?
-    WHERE id = ?
-  `).run(name, sku, unitOfMeasure, price, imageUrl, category, standardCost, unitCost, isActive, id)
+  const { data: after } = await supabase.from("products").select().eq("id", id).single()
 
-  const after = db.prepare("SELECT * FROM products WHERE id = ?").get(id) as Record<string, unknown>
-
-  writeAuditLog(db, {
+  await writeAuditLog({
     userId: auth.id,
     action: "PRODUCT_UPDATED",
     entityType: "product",
     entityId: id,
-    before: mapProduct(before),
-    after: mapProduct(after),
+    before: mapProduct(before as Record<string, unknown>),
+    after: mapProduct(after as Record<string, unknown>),
   })
 
-  return NextResponse.json(mapProduct(after))
+  return NextResponse.json(mapProduct(after as Record<string, unknown>))
 }

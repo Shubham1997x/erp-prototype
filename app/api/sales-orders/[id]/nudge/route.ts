@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getDb } from "@/lib/db"
+import { getSupabase } from "@/lib/supabase"
 import { requireNotViewer } from "@/lib/auth"
 import { createNotification, writeAuditLog } from "@/lib/audit"
 
@@ -18,25 +18,32 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const { id } = await params
-  const db = getDb()
+  const supabase = getSupabase()
 
-  const order = db.prepare("SELECT id, status, customer_id, order_number FROM sales_orders WHERE id = ?").get(id) as
-    | { id: string; status: string; customer_id: string; order_number?: string }
-    | undefined
+  const { data: order } = await supabase
+    .from("sales_orders")
+    .select("id, status, customer_id, order_number")
+    .eq("id", id)
+    .single()
 
   if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 })
   if (order.status !== "NEEDS_RESTOCK") {
-    return NextResponse.json({ error: "Nudge is only available for orders that need restock" }, { status: 400 })
+    return NextResponse.json(
+      { error: "Nudge is only available for orders that need restock" },
+      { status: 400 }
+    )
   }
 
-  const customer = db.prepare("SELECT name FROM customers WHERE id = ?").get(order.customer_id) as
-    | { name: string }
-    | undefined
+  const { data: customer } = await supabase
+    .from("customers")
+    .select("name")
+    .eq("id", order.customer_id)
+    .single()
 
   const customerName = customer?.name ?? "Unknown customer"
   const orderNum = order.order_number ?? id
 
-  createNotification(db, {
+  await createNotification({
     role: "Inventory Manager",
     type: "SO_NUDGE_RESTOCK",
     title: `Order ${orderNum} — restock reminder`,
@@ -45,7 +52,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     entityId: id,
   })
 
-  writeAuditLog(db, {
+  await writeAuditLog({
     userId: auth.id,
     action: "SO_NUDGE_INVENTORY",
     entityType: "sales_order",

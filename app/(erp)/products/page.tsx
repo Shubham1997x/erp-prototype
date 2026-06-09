@@ -404,24 +404,16 @@ export default function ProductsPage() {
                     )}
                   >
                     <TableCell>
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
-                        {p.imageUrl ? (
+                      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted/30">
+                        <Package size={20} className="text-muted-foreground/40" />
+                        {p.imageUrl && (
                           <img
                             src={p.imageUrl}
-                            alt={p.name}
-                            className="h-full w-full object-cover"
-                            onError={(e) => {
-                              const t = e.currentTarget
-                              t.style.display = "none"
-                              t.parentElement?.querySelector(".img-fallback")?.removeAttribute("hidden")
-                            }}
+                            alt=""
+                            className="absolute inset-0 h-full w-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = "none" }}
                           />
-                        ) : null}
-                        <Package
-                          size={20}
-                          className="img-fallback text-muted-foreground/50"
-                          hidden={!!p.imageUrl}
-                        />
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-[13px] font-medium text-foreground">
@@ -769,7 +761,7 @@ export default function ProductsPage() {
                     accept="image/*"
                     onChange={handleEditImageUpload}
                     disabled={uploadingImage}
-                    className="w-full text-xs"
+                    className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-primary/10 file:px-2 file:py-1 file:text-xs file:font-semibold file:text-primary hover:file:bg-primary/20"
                   />
                 </div>
               </div>
