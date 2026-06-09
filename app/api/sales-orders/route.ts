@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { requireNotViewer } from "@/lib/auth"
 import { writeAuditLog } from "@/lib/audit"
 import { newId } from "@/lib/core"
-import { enrichOrder } from "@/lib/sales-order-enrich"
+import { enrichOrder, enrichOrdersBulk } from "@/lib/sales-order-enrich"
 
 export const dynamic = "force-dynamic"
 
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   const status = url.searchParams.get("status")
   const search = url.searchParams.get("q")
 
-  let query = supabase.from("sales_orders").select("*", { count: "exact" })
+  let query = supabase.from("sales_orders").select("*, lines:sales_order_lines(*, products(image_url))", { count: "exact" })
 
   if (status) {
     if (status.includes(",")) {
@@ -47,7 +47,7 @@ export async function GET(req: Request) {
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1)
 
-  const enriched = await Promise.all((rows ?? []).map(enrichOrder))
+  const enriched = await enrichOrdersBulk(rows ?? [])
   return NextResponse.json({ data: enriched, total: count ?? 0, page, limit })
 }
 

@@ -469,7 +469,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                 {canShip && (
                   <Button
                     onClick={() => { setShipForm({ carrier: "", trackingNumber: "" }); setShipDialog(true) }}
-                    className="gap-2 bg-teal-600 hover:bg-teal-700 text-white shadow-sm"
+                    className="gap-2 shadow-sm"
                   >
                     <Truck size={16} /> Ship Order
                   </Button>
@@ -478,7 +478,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                   <Button
                     onClick={handleMarkDelivered}
                     disabled={markingDelivered}
-                    className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                    className="gap-2 shadow-sm"
                   >
                     {markingDelivered ? <Spinner size={16} className="animate-spin" /> : <CheckCircle size={16} />}
                     Mark Delivered
@@ -973,7 +973,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
           </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setShipDialog(false)}>Cancel</Button>
-            <Button onClick={handleShip} disabled={shipping || !shipForm.carrier.trim()} className="bg-teal-600 hover:bg-teal-700 text-white">
+            <Button onClick={handleShip} disabled={shipping || !shipForm.carrier.trim()}>
               {shipping ? <Spinner size={16} className="animate-spin mr-2" /> : null} Confirm Shipment
             </Button>
           </DialogFooter>

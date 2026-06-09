@@ -18,6 +18,7 @@ export async function GET() {
       price: r.price,
       bomId: r.bom_id,
       currentStock: Math.max(0, r.current_stock as number),
+      reservedStock: Math.max(0, (r.reserved_stock as number) ?? 0),
       imageUrl: r.image_url,
     }))
   )

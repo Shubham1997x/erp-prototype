@@ -323,7 +323,7 @@ export default function NewOrderPage() {
                                 const usedElsewhere = lines.some((l, i) => i !== idx && l.productId === p.id)
                                 return (
                                   <SelectItem key={p.id} value={p.id} disabled={usedElsewhere}>
-                                    {p.name} (SKU: {p.sku}) — {formatINR(p.price)}
+                                    {p.name} — {formatINR(p.price)} · Stock: {Math.max(0, p.currentStock - (p.reservedStock ?? 0))} pcs
                                   </SelectItem>
                                 )
                               })}

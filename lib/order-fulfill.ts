@@ -25,16 +25,21 @@ async function getOrderLines(orderId: string) {
 
 export async function getOrderStockShortages(orderId: string): Promise<StockShortage[]> {
   const lines = await getOrderLines(orderId)
+  if (lines.length === 0) return []
+  
   const shortages: StockShortage[] = []
   const supabase = getSupabase()
 
-  for (const line of lines) {
-    const { data: product } = await supabase
-      .from("products")
-      .select("id, name, current_stock")
-      .eq("id", line.product_id)
-      .single()
+  const productIds = lines.map(l => l.product_id)
+  const { data: products } = await supabase
+    .from("products")
+    .select("id, name, current_stock")
+    .in("id", productIds)
+    
+  const productMap = new Map((products ?? []).map(p => [p.id, p]))
 
+  for (const line of lines) {
+    const product = productMap.get(line.product_id)
     if (!product) throw new Error(`Product not found: ${line.product_id}`)
     if (product.current_stock < line.qty) {
       shortages.push({
@@ -95,17 +100,22 @@ export async function fulfillSalesOrder(opts: {
 
   const lines = await getOrderLines(orderId)
 
-  for (const line of lines) {
-    const { data: product } = await supabase
+  if (lines.length > 0) {
+    const productIds = lines.map(l => l.product_id)
+    const { data: products } = await supabase
       .from("products")
-      .select("current_stock")
-      .eq("id", line.product_id)
-      .single()
+      .select("id, current_stock")
+      .in("id", productIds)
+      
+    const productMap = new Map((products ?? []).map(p => [p.id, p]))
+    
+    await Promise.all(lines.map(async (line) => {
+      const product = productMap.get(line.product_id)
+      const newStock = Math.max(0, (product?.current_stock ?? 0) - line.qty)
+      await supabase.from("products").update({ current_stock: newStock }).eq("id", line.product_id)
+    }))
 
-    const newStock = Math.max(0, (product?.current_stock ?? 0) - line.qty)
-    await supabase.from("products").update({ current_stock: newStock }).eq("id", line.product_id)
-
-    await supabase.from("stock_movements").insert({
+    const movements = lines.map(line => ({
       entity_type: "product",
       entity_id: line.product_id,
       delta: -line.qty,
@@ -114,7 +124,9 @@ export async function fulfillSalesOrder(opts: {
       reference_id: orderId,
       created_by: userId,
       created_at: now,
-    })
+    }))
+    
+    await supabase.from("stock_movements").insert(movements)
   }
 
   await supabase
