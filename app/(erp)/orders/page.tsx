@@ -20,6 +20,12 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu"
+import {
   Table,
   TableBody,
   TableCell,
@@ -38,6 +44,9 @@ import {
   CheckCircle,
   Clock,
   FileArrowDown,
+  Export,
+  FileCsv,
+  FilePdf,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -269,6 +278,34 @@ export default function OrdersPage() {
     }
   }
 
+  function handleExportCSV() {
+    if (!summaryOrders || summaryOrders.length === 0) {
+      toast.error("No orders to export")
+      return
+    }
+    const headers = ["Order ID", "Customer ID", "Date", "Status", "Total Amount", "Sales Rep"]
+    const rows = summaryOrders.map(order => {
+      const total = order.lines.reduce((s, l) => s + l.qty * l.unitPrice, 0)
+      return [
+        order.id,
+        order.customerId,
+        new Date(order.createdAt).toISOString(),
+        order.status,
+        total,
+        order.salesPersonName || ""
+      ].join(",")
+    })
+    const csv = [headers.join(","), ...rows].join("\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `orders_export_${new Date().toISOString().split('T')[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success("CSV exported successfully")
+  }
+
 
 
   return (
@@ -284,14 +321,16 @@ export default function OrdersPage() {
               : "Loading orders…"}
           </p>
         </div>
-        {canCreateOrder && !loadingUser && (
-          <Button
-            onClick={() => router.push("/orders/new")}
-            className="gap-2 shadow-sm shadow-primary/20"
-          >
-            <Plus size={15} weight="bold" /> New Order
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canCreateOrder && !loadingUser && (
+            <Button
+              onClick={() => router.push("/orders/new")}
+              className="gap-2 shadow-sm shadow-primary/20"
+            >
+              <Plus size={15} weight="bold" /> New Order
+            </Button>
+          )}
+        </div>
       </div>
 
       {!contentReady ? (
@@ -349,30 +388,39 @@ export default function OrdersPage() {
           </div>
 
           {/* Tabs */}
-          <div className="overflow-x-auto border-b">
-            <div className="flex min-w-max items-center gap-1">
-              {ORDER_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => switchTab(tab.id)}
-                  className={cn(
-                    "relative flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors",
-                    activeTab === tab.id
-                      ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {tab.label}
-                  <span className={cn(
-                    "rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums",
-                    activeTab === tab.id ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
-                    tab.id === "inventory_hold" && tabCounts.inventory_hold > 0 && activeTab !== tab.id && "bg-amber-500/15 text-amber-600"
-                  )}>
-                    {tabCounts[tab.id]}
-                  </span>
-                </button>
-              ))}
+          <div className="border-b overflow-x-auto overflow-y-hidden">
+            <div className="flex min-w-max items-center justify-between pb-1">
+              <div className="flex items-center gap-1">
+                {ORDER_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => switchTab(tab.id)}
+                    className={cn(
+                      "relative flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors",
+                      activeTab === tab.id
+                        ? "text-foreground after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-primary"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {tab.label}
+                    <span className={cn(
+                      "rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums",
+                      activeTab === tab.id ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
+                      tab.id === "inventory_hold" && tabCounts.inventory_hold > 0 && activeTab !== tab.id && "bg-amber-500/15 text-amber-600"
+                    )}>
+                      {tabCounts[tab.id]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex shrink-0 items-center pl-4 pr-1">
+                {contentReady && totalCount > 0 && (
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs shadow-sm" onClick={handleExportCSV}>
+                    <FileCsv size={14} weight="bold" /> Export CSV
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 

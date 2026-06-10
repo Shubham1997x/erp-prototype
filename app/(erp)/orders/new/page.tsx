@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import {
   ArrowLeft,
   ArrowRight,
@@ -54,6 +55,24 @@ const STEPS = [
   { label: "Review", icon: FileText, description: "Review and submit" },
 ]
 
+interface CustomerForm {
+  name: string
+  contact: string
+  email: string
+  address: string
+  creditLimit: number
+  paymentTerms: string
+}
+
+const emptyForm: CustomerForm = {
+  name: "",
+  contact: "",
+  email: "",
+  address: "",
+  creditLimit: 0,
+  paymentTerms: "Net 30",
+}
+
 export default function NewOrderPage() {
   const router = useRouter()
   const { isSales, isAdmin } = useUser()
@@ -79,6 +98,11 @@ export default function NewOrderPage() {
   ])
   const [saving, setSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+
+  // New Customer Modal State
+  const [showNewCustomer, setShowNewCustomer] = useState(false)
+  const [newCustomerForm, setNewCustomerForm] = useState<CustomerForm>(emptyForm)
+  const [savingCustomer, setSavingCustomer] = useState(false)
 
   const canCreate = isSales || isAdmin
   const selectedCustomer = allCustomers.find((c) => c.id === customerId)
@@ -218,6 +242,28 @@ export default function NewOrderPage() {
     }
   }
 
+  async function handleCreateCustomer() {
+    if (!newCustomerForm.name.trim()) {
+      toast.error("Company name is required")
+      return
+    }
+    setSavingCustomer(true)
+    try {
+      const newCust = await apiPost("/api/customers", newCustomerForm)
+      toast.success("Customer added")
+      setShowNewCustomer(false)
+      customersRes.refetch()
+      if (newCust && (newCust as any).id) {
+        setCustomerId((newCust as any).id)
+      }
+      setNewCustomerForm(emptyForm)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save customer")
+    } finally {
+      setSavingCustomer(false)
+    }
+  }
+
   if (!canCreate) {
     return (
       <div className="flex h-96 items-center justify-center p-6">
@@ -320,24 +366,34 @@ export default function NewOrderPage() {
                       <User className="size-6 text-muted-foreground/40" />
                     </div>
                   )}
-                  <div className="flex-1">
-                    <Select value={customerId} onValueChange={setCustomerId}>
-                      <SelectTrigger id="customer-select" className="w-full h-9 font-medium">
-                        <SelectValue placeholder="— Select a Customer —" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {allCustomers.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name} {c.contact ? `(${c.contact})` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {!selectedCustomer && (
-                      <p className="mt-1.5 text-xs text-muted-foreground">
-                        Choose the customer this order is being placed for.
-                      </p>
-                    )}
+                  <div className="flex-1 flex gap-2">
+                    <div className="flex-1">
+                      <Select value={customerId} onValueChange={setCustomerId}>
+                        <SelectTrigger id="customer-select" className="w-full h-9 font-medium">
+                          <SelectValue placeholder="— Select a Customer —" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allCustomers.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name} {c.contact ? `(${c.contact})` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {!selectedCustomer && (
+                        <p className="mt-1.5 text-xs text-muted-foreground">
+                          Choose the customer this order is being placed for.
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      className="h-9 gap-1.5 shrink-0 px-3 shadow-sm"
+                      onClick={() => setShowNewCustomer(true)}
+                    >
+                      <Plus className="size-3.5" />
+                      <span className="hidden sm:inline">New Customer</span>
+                      <span className="sm:hidden">New</span>
+                    </Button>
                   </div>
                 </div>
 
@@ -789,6 +845,88 @@ export default function NewOrderPage() {
           <div className="w-[90px]" />
         )}
       </div>
+
+      {/* New Customer Dialog */}
+      <Dialog open={showNewCustomer} onOpenChange={setShowNewCustomer}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Customer</DialogTitle>
+          </DialogHeader>
+          <div className="py-2 space-y-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                Company Name *
+              </label>
+              <Input
+                value={newCustomerForm.name}
+                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, name: e.target.value })}
+                placeholder="e.g. Zara India Pvt Ltd"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Phone</label>
+                <Input
+                  value={newCustomerForm.contact}
+                  onChange={(e) => setNewCustomerForm({ ...newCustomerForm, contact: e.target.value })}
+                  placeholder="+91-99XXXXXXXX"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Email</label>
+                <Input
+                  type="email"
+                  value={newCustomerForm.email}
+                  onChange={(e) => setNewCustomerForm({ ...newCustomerForm, email: e.target.value })}
+                  placeholder="orders@company.com"
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Address</label>
+              <Input
+                value={newCustomerForm.address}
+                onChange={(e) => setNewCustomerForm({ ...newCustomerForm, address: e.target.value })}
+                placeholder="Street, City, PIN"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Credit Limit (₹)</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={newCustomerForm.creditLimit}
+                  onChange={(e) => setNewCustomerForm({ ...newCustomerForm, creditLimit: parseFloat(e.target.value) || 0 })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Payment Terms</label>
+                <Select
+                  value={newCustomerForm.paymentTerms}
+                  onValueChange={(v) => setNewCustomerForm({ ...newCustomerForm, paymentTerms: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {["Net 15", "Net 30", "Net 45", "Net 60", "Advance", "COD"].map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewCustomer(false)}>Cancel</Button>
+            <Button onClick={handleCreateCustomer} disabled={savingCustomer || !newCustomerForm.name.trim()}>
+              {savingCustomer ? <Spinner className="size-4 animate-spin mr-2" /> : null}
+              Save Customer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
