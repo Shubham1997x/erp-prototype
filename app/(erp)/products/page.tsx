@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useFetch, apiPost, apiPatch } from "@/hooks/use-api"
 import { useUser } from "@/hooks/use-user"
@@ -30,6 +30,7 @@ import {
   ArrowUp,
   Eye,
   PencilSimple,
+  X,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -60,8 +61,14 @@ export default function ProductsPage() {
 
   // Search & pagination
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 10
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
 
   // Add product
   const [addOpen, setAddOpen] = useState(false)
@@ -132,8 +139,8 @@ export default function ProductsPage() {
   const products = unwrap(productsRes)
   const filteredProducts = products.filter(
     (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.sku && p.sku.toLowerCase().includes(search.toLowerCase()))
+      p.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      (p.sku && p.sku.toLowerCase().includes(debouncedSearch.toLowerCase()))
   )
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE))
   const pagedProducts = filteredProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -335,12 +342,22 @@ export default function ProductsPage() {
       </div>
 
       {/* Search */}
-      <input
-        value={search}
-        onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-        placeholder="Search by name or SKU..."
-        className="w-full rounded-lg border border-input bg-card px-4 py-2.5 text-sm shadow-sm transition-colors focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
-      />
+      <div className="relative w-full">
+        <input
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          placeholder="Search by name or SKU..."
+          className="w-full rounded-lg border border-input bg-card px-4 py-2.5 pr-10 text-sm shadow-sm transition-colors focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
+        />
+        {search && (
+          <button
+            onClick={() => { setSearch(""); setPage(1) }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+          >
+            <X size={16} weight="bold" />
+          </button>
+        )}
+      </div>
 
       {/* Products table */}
       <div className="glass-card overflow-hidden">

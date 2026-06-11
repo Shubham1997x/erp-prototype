@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useFetch, apiPost } from "@/hooks/use-api"
 import { useUser } from "@/hooks/use-user"
@@ -212,6 +212,13 @@ export default function OrdersPage() {
 
   const [activeTab, setActiveTab] = useState<OrderTabId>("in_progress")
   const [page, setPage] = useState(1)
+  const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
 
   // Summary fetch — all orders, minimal, for stat card counts
   const { data: summaryRes, refetch: refetchSummary } = useFetch<PaginatedResponse<SalesOrder>>(
@@ -221,8 +228,8 @@ export default function OrdersPage() {
   // Paginated fetch — filtered by active tab statuses
   const tabStatuses = TAB_STATUSES[activeTab].join(",")
   const { data: ordersRes, loading: loadingOrders, refetch: refetchOrders } = useFetch<PaginatedResponse<SalesOrder>>(
-    `/api/sales-orders?status=${tabStatuses}&page=${page}&limit=${PAGE_SIZE}`,
-    [activeTab, page]
+    `/api/sales-orders?status=${tabStatuses}&page=${page}&limit=${PAGE_SIZE}${debouncedSearch ? `&q=${encodeURIComponent(debouncedSearch)}` : ""}`,
+    [activeTab, page, debouncedSearch]
   )
 
   const { data: customersRes } = useFetch<Customer[] | PaginatedResponse<Customer>>("/api/customers")
@@ -260,7 +267,7 @@ export default function OrdersPage() {
     setPage(1)
   }
 
-  const contentReady = !loadingOrders && !loadingUser
+  const contentReady = !loadingUser && !!summaryRes && !!ordersRes
   const canCreateOrder = isSales || isAdmin
   const canDownloadInvoice = isSales || isAdmin
 
@@ -414,7 +421,23 @@ export default function OrdersPage() {
                   </button>
                 ))}
               </div>
-              <div className="flex shrink-0 items-center pl-4 pr-1">
+              <div className="flex shrink-0 items-center pl-4 pr-1 gap-2">
+                <div className="relative">
+                  <input
+                    value={search}
+                    onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                    placeholder="Search by ID or Note..."
+                    className="w-[180px] sm:w-[250px] rounded-lg border border-input bg-card px-3 py-1.5 pr-8 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  {search && (
+                    <button
+                      onClick={() => { setSearch(""); setPage(1); }}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    >
+                      <X size={12} weight="bold" />
+                    </button>
+                  )}
+                </div>
                 {contentReady && totalCount > 0 && (
                   <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs shadow-sm" onClick={handleExportCSV}>
                     <FileCsv size={14} weight="bold" /> Export CSV

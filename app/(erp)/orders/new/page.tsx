@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useFetch, apiPost } from "@/hooks/use-api"
 import { useUser } from "@/hooks/use-user"
@@ -25,6 +25,7 @@ import {
   CheckCircle,
   FileText,
   TShirt,
+  X,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -98,6 +99,12 @@ export default function NewOrderPage() {
   ])
   const [saving, setSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300)
+    return () => clearTimeout(t)
+  }, [searchQuery])
 
   // New Customer Modal State
   const [showNewCustomer, setShowNewCustomer] = useState(false)
@@ -109,15 +116,15 @@ export default function NewOrderPage() {
   const hasProducts = lines.some((l) => l.productId)
 
   const filteredCatalog = useMemo(() => {
-    if (!searchQuery.trim()) return allProducts.slice(0, 6)
+    if (!debouncedSearchQuery.trim()) return allProducts.slice(0, 6)
     return allProducts
       .filter(
         (p) =>
-          p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          p.sku.toLowerCase().includes(searchQuery.toLowerCase())
+          p.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+          p.sku.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
       )
       .slice(0, 6)
-  }, [allProducts, searchQuery])
+  }, [allProducts, debouncedSearchQuery])
 
   const subtotal = useMemo(() => lines.reduce((s, l) => s + l.qty * l.unitPrice, 0), [lines])
   const taxTotal = useMemo(
@@ -601,8 +608,16 @@ export default function NewOrderPage() {
                         placeholder="Search shirts..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-8 h-8 text-xs rounded-lg"
+                        className="pl-8 pr-8 h-8 text-xs rounded-lg"
                       />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery("")}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                        >
+                          <X size={12} weight="bold" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </CardHeader>

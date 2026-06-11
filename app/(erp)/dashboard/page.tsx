@@ -156,7 +156,7 @@ export default function DashboardPage() {
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
           <CardHeader className="pb-0 relative z-10">
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Revenue</CardTitle>
-            <div className="mt-2 text-5xl font-black tracking-tighter gradient-text">
+            <div className="mt-2 text-5xl font-black tracking-tighter ">
               {lo ? <div className="h-12 w-48 shimmer" /> : formatINR(revenue)}
             </div>
             <div className="flex items-center gap-2 mt-2 text-sm font-medium text-emerald-500">
@@ -272,7 +272,7 @@ export default function DashboardPage() {
           </div>
           <div className="flex-1 w-full">
             <CardTitle className="text-lg font-bold mb-1 flex items-center gap-2">
-              <Package weight="duotone" className="text-primary w-5 h-5" /> 
+              <Package weight="duotone" className="text-primary w-5 h-5" />
               Stock Health
             </CardTitle>
             <CardDescription className="text-xs mb-4">
@@ -281,21 +281,21 @@ export default function DashboardPage() {
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="flex flex-col bg-muted/30 rounded-lg p-2 border border-border/50">
                 <span className="text-muted-foreground flex items-center gap-1.5 font-medium mb-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.8)]" /> 
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.8)]" />
                   Healthy
                 </span>
                 <span className="font-bold text-lg">{inStockProds.length}</span>
               </div>
               <div className="flex flex-col bg-muted/30 rounded-lg p-2 border border-border/50">
                 <span className="text-muted-foreground flex items-center gap-1.5 font-medium mb-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.8)]" /> 
+                  <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.8)]" />
                   Low
                 </span>
                 <span className="font-bold text-lg">{lowStockProds.length}</span>
               </div>
               <div className="flex flex-col bg-muted/30 rounded-lg p-2 border border-border/50">
                 <span className="text-muted-foreground flex items-center gap-1.5 font-medium mb-1">
-                  <span className="w-2 h-2 rounded-full bg-destructive shadow-[0_0_4px_rgba(239,68,68,0.8)]" /> 
+                  <span className="w-2 h-2 rounded-full bg-destructive shadow-[0_0_4px_rgba(239,68,68,0.8)]" />
                   Out
                 </span>
                 <span className="font-bold text-lg">{outOfStockProds.length}</span>

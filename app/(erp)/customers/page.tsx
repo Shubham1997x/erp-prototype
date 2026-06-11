@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useFetch, apiPost, apiPatch, apiDelete } from "@/hooks/use-api"
 import type { Customer, SalesOrder } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -32,6 +32,7 @@ import {
   Buildings,
   Lock,
   ArrowCounterClockwise,
+  X,
 } from "@phosphor-icons/react"
 import { toast } from "sonner"
 import { useUser } from "@/hooks/use-user"
@@ -182,8 +183,14 @@ export default function CustomersPage() {
   const [editTarget, setEditTarget] = useState<Customer | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null)
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [form, setForm] = useState<CustomerForm>(emptyForm)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
 
   // Unwrap both plain-array and paginated {data:[]} API shapes safely
   function unwrap<T>(res: { data: T[] } | T[] | null | undefined): T[] {
@@ -197,8 +204,8 @@ export default function CustomersPage() {
   const allOrders = unwrap(ordersRes)
   const filtered = allCustomers.filter(
     (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.email?.toLowerCase().includes(search.toLowerCase())
+      c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      c.email?.toLowerCase().includes(debouncedSearch.toLowerCase())
   )
 
   function openCreate() {
@@ -349,12 +356,22 @@ export default function CustomersPage() {
             Deleted ({(deletedRes ?? []).length})
           </button>
         </div>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name or email..."
-          className="w-full max-w-sm rounded-lg border border-input bg-card px-3 py-2 text-sm"
-        />
+        <div className="relative w-full max-w-sm">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or email..."
+            className="w-full rounded-lg border border-input bg-card px-3 py-2 pr-9 text-sm"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+            >
+              <X size={14} weight="bold" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Deleted customers grid */}
@@ -368,7 +385,7 @@ export default function CustomersPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {(deletedRes ?? [])
-              .filter((c: Customer) => !search || c.name.toLowerCase().includes(search.toLowerCase()) || c.email?.toLowerCase().includes(search.toLowerCase()))
+              .filter((c: Customer) => !debouncedSearch || c.name.toLowerCase().includes(debouncedSearch.toLowerCase()) || c.email?.toLowerCase().includes(debouncedSearch.toLowerCase()))
               .map((c: Customer) => {
                 const initials = c.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2)
                 return (
