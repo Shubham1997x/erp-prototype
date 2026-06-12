@@ -100,8 +100,8 @@ export default function ProductsPage() {
       const data = await res.json()
       setAddForm((prev) => ({ ...prev, imageUrl: data.url }))
       toast.success("Image uploaded successfully")
-    } catch (error: any) {
-      toast.error(error.message)
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "An unknown error occurred")
     } finally {
       setUploadingImage(false)
     }
@@ -149,7 +149,6 @@ export default function ProductsPage() {
     0
   )
   const lowStock = filteredProducts.filter((p) => p.currentStock < 10)
-  const inStock = filteredProducts.filter((p) => p.currentStock >= 10)
 
   async function handleAddProduct() {
     if (!addForm.name.trim()) {

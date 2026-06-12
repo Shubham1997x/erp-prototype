@@ -12,14 +12,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+
 import {
   Plus,
   PencilSimple,
@@ -29,7 +22,7 @@ import {
   Phone,
   MapPin,
   Spinner,
-  Buildings,
+
   Lock,
   ArrowCounterClockwise,
   X,
@@ -172,7 +165,6 @@ export default function CustomersPage() {
   } = useFetch<Customer[] | { data: Customer[] }>("/api/customers")
   const {
     data: deletedRes,
-    loading: loadingDeleted,
     refetch: refetchDeleted,
   } = useFetch<Customer[]>("/api/customers?deleted=true")
   const { data: ordersRes } = useFetch<{ data: SalesOrder[] }>(
