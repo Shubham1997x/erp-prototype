@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -131,7 +132,7 @@ export default function LoginPage() {
           <div className="text-center space-y-2 lg:text-left lg:flex lg:flex-col lg:items-start">
             <div className="flex justify-center lg:justify-start">
               <div className="size-12 rounded-2xl bg-slate-950 flex items-center justify-center shadow-xl shadow-slate-950/20 border border-white/10 overflow-hidden">
-                <img src="/logo.jpg" className="size-full object-cover" alt="ShirtCo" />
+                <Image src="/logo.jpg" width={48} height={48} className="size-full object-cover" alt="ShirtCo" />
               </div>
             </div>
             <div>

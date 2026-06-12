@@ -111,7 +111,7 @@
   }
 
   .gradient-text {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 via-blue-500 to-sky-400;
+    @apply bg-clip-text text-transparent bg-linear-to-r from-indigo-600 via-blue-500 to-sky-400;
   }
 
   .badge-status {

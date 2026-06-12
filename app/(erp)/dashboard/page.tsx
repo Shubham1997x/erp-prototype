@@ -2,17 +2,17 @@
 
 import { useFetch } from "@/hooks/use-api"
 import type { Customer, Product, SalesOrder } from "@/lib/types"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ShoppingCart, Users, Warning, CheckCircle, ArrowRight, TrendUp, Package, Sparkle } from "@phosphor-icons/react"
+import { ShoppingCart, Users, Warning, ArrowRight, TrendUp, Package } from "@phosphor-icons/react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { getCompanyImageUrl } from "@/lib/avatar-utils"
 
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, PieChart, Pie
+  Bar, BarChart, ResponsiveContainer, Tooltip, Cell, PieChart, Pie
 } from "recharts"
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from "@/components/ui/chart"
+import { ChartContainer, ChartConfig } from "@/components/ui/chart"
 
 function formatINR(v: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v)
@@ -119,7 +119,6 @@ export default function DashboardPage() {
     })
   })()
 
-  const statusTotal = statusData.reduce((sum, item) => sum + item.value, 0)
 
   const stockHealthPct = prods.length > 0 ? Math.round((inStockProds.length / prods.length) * 100) : 0
 
@@ -129,9 +128,9 @@ export default function DashboardPage() {
 
       {/* Animated Ambient Background Effects */}
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-[15%] -left-[10%] w-[50%] h-[50%] rounded-full bg-primary/20 blur-[120px] mix-blend-screen opacity-70 animate-pulse duration-[10000ms]" />
-        <div className="absolute top-[20%] -right-[15%] w-[40%] h-[40%] rounded-full bg-emerald-500/15 blur-[100px] mix-blend-screen opacity-50" />
-        <div className="absolute -bottom-[20%] left-[20%] w-[60%] h-[50%] rounded-full bg-indigo-500/15 blur-[120px] mix-blend-screen opacity-60" />
+        <div className="absolute top-[-15%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary/20 blur-[120px] mix-blend-screen opacity-70 animate-pulse duration-10000" />
+        <div className="absolute top-[20%] right-[-15%] w-[40%] h-[40%] rounded-full bg-emerald-500/15 blur-[100px] mix-blend-screen opacity-50" />
+        <div className="absolute bottom-[-20%] left-[20%] w-[60%] h-[50%] rounded-full bg-indigo-500/15 blur-[120px] mix-blend-screen opacity-60" />
       </div>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
@@ -153,7 +152,7 @@ export default function DashboardPage() {
 
         {/* Main Revenue Hero Card (Spans 2x2 on large screens) */}
         <Card className="glass-card md:col-span-2 xl:col-span-2 xl:row-span-2 flex flex-col relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
           <CardHeader className="pb-0 relative z-10">
             <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Total Revenue</CardTitle>
             <div className="mt-2 text-5xl font-black tracking-tighter ">

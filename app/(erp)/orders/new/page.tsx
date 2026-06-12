@@ -766,7 +766,7 @@ export default function NewOrderPage() {
             {/* Right: Invoice Summary + Actions */}
             <div className="lg:col-span-5 lg:sticky lg:top-6">
               <div className="bg-card border-border/60 shadow-lg rounded-2xl overflow-hidden border">
-                <div className="h-1.5 bg-gradient-to-r from-violet-500 via-indigo-500 to-blue-500" />
+                <div className="h-1.5 bg-linear-to-r from-violet-500 via-indigo-500 to-blue-500" />
                 <div className="p-5 space-y-5">
                   <h3 className="font-heading text-sm font-bold flex items-center gap-2 border-b pb-3">
                     <ShoppingCart className="size-4 text-primary" />
