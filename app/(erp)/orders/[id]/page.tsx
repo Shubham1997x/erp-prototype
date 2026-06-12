@@ -16,7 +16,7 @@ import { EditOrderDialog } from "@/components/erp/edit-order-dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   ArrowLeft, CheckCircle, Warning, Package, CaretRight, Spinner, Check, XCircle, BellRinging, Truck, FileArrowDown,
-  PencilSimple, Plus, X, ShoppingCart,
+  PencilSimple, ShoppingCart,
   UserCircle,
   FileText
 } from "@phosphor-icons/react"
@@ -302,8 +302,8 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
       toast.success("Order cancelled")
       setCancelDialog(false)
       await refetch()
-    } catch (err: any) {
-      toast.error(err.message)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to cancel order")
     } finally {
       setCancelling(false)
     }
@@ -513,7 +513,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
         </div>
       </div>
 
-            {/* Banner Actions */}
+      {/* Banner Actions */}
       <div className="space-y-4 mb-6">
         {(order.status === "NEEDS_RESTOCK") && (() => {
           if (!hasShortages) {
@@ -595,6 +595,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                         <div className="w-8 h-8 rounded bg-muted flex items-center justify-center shrink-0 relative overflow-hidden border">
                           <Package size={14} className="text-muted-foreground/50" />
                           {s.image && (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img src={s.image} alt="" className="absolute inset-0 w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none" }} />
                           )}
                         </div>
@@ -708,7 +709,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
         {/* Order Metadata */}
         <div className="glass-card p-5">
           <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
-             <FileText weight="bold" size={14} /> Order Metadata
+            <FileText weight="bold" size={14} /> Order Metadata
           </h3>
           <div className="space-y-3">
             <div>
@@ -781,6 +782,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
                       <div className="w-10 h-10 rounded-md border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden relative">
                         <Package size={20} className="text-muted-foreground/40" />
                         {p?.imageUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
                           <img src={p.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = "none" }} />
                         )}
                       </div>
